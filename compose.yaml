@@ -22,7 +22,7 @@ services:
       DB_USERNAME: nevis
       DB_PASSWORD: nevis
     ports:
-      - "8080:8080"
+      - "${APP_HOST_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,4 +30,3 @@ services:
 
 volumes:
   postgres-data:
-

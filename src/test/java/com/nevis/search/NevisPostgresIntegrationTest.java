@@ -197,14 +197,16 @@ class NevisPostgresIntegrationTest {
                         .contentType("application/json")
                         .content("""
                                 {
-                                  "firstName": "Anton",
-                                  "lastName": "Batiaev",
+                                  "first_name": "Anton",
+                                  "last_name": "Batiaev",
                                   "email": "anton.batiaev@neviswealth.com",
                                   "countryOfResidence": "UK"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/clients/")))
+                .andExpect(jsonPath("$.first_name").value("Anton"))
+                .andExpect(jsonPath("$.last_name").value("Batiaev"))
                 .andExpect(jsonPath("$.email").value("anton.batiaev@neviswealth.com"))
                 .andReturn()
                 .getResponse()
@@ -217,7 +219,9 @@ class NevisPostgresIntegrationTest {
                                 {"title":"Utility Bill","content":"Electricity bill for this address"}
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.clientId").value(clientId));
+                .andExpect(jsonPath("$.client_id").value(clientId))
+                .andExpect(jsonPath("$.content").value("Electricity bill for this address"))
+                .andExpect(jsonPath("$.created_at").exists());
 
         mockMvc.perform(get("/clients/{clientId}/documents", clientId).param("q", "address proof"))
                 .andExpect(status().isOk())
@@ -238,7 +242,8 @@ class NevisPostgresIntegrationTest {
 
         mockMvc.perform(get("/search").param("q", "address proof"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].type", hasItem("DOCUMENT")));
+                .andExpect(jsonPath("$[*].type", hasItem("DOCUMENT")))
+                .andExpect(jsonPath("$[*].title", hasItem("Utility Bill")));
 
         mockMvc.perform(get("/search").param("q", "definitely missing"))
                 .andExpect(status().isOk())
@@ -262,10 +267,41 @@ class NevisPostgresIntegrationTest {
         mockMvc.perform(get("/search").param("q", "   "))
                 .andExpect(status().isBadRequest());
 
+        mockMvc.perform(get("/search"))
+                .andExpect(status().isBadRequest());
+
         mockMvc.perform(post("/clients")
                         .contentType("application/json")
                         .content("{invalid"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Malformed request"));
+
+        mockMvc.perform(post("/clients")
+                        .contentType("application/octet-stream")
+                        .content("{}"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.status").value(415))
+                .andExpect(jsonPath("$.message").value("Unsupported media type"));
+    }
+
+    @Test
+    void openApiDocumentsJsonContractAndActualResponseStatuses() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name").exists())
+                .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.last_name").exists())
+                .andExpect(jsonPath("$.components.schemas.DocumentResponse.properties.client_id").exists())
+                .andExpect(jsonPath("$.components.schemas.DocumentResponse.properties.created_at").exists())
+                .andExpect(jsonPath("$.paths['/clients'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/clients'].post.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['/clients'].post.responses['415']").exists())
+                .andExpect(jsonPath("$.paths['/clients'].post.responses['500']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['415']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].get.responses['200']").exists())
+                .andExpect(jsonPath("$.paths['/search'].get.responses['200']").exists())
+                .andExpect(jsonPath("$.paths['/search'].get.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['/search'].get.responses['500']").exists());
     }
 }

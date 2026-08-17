@@ -1,6 +1,6 @@
 # Nevis Search Service — As-Built Architecture
 
-> Status: implementation architecture as of 2026-08-17.
+> Status: implementation architecture as of 2026-08-18.
 >
 > The original agreed plan is preserved unchanged in
 > [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). The narrower client-search requirements in
@@ -81,6 +81,11 @@ PostgreSQL-specific FTS syntax remains under `infrastructure.postgres` and in Fl
 
 API DTOs are separate from domain records. Global search uses the sealed
 `SearchResultResponse` hierarchy with the `CLIENT` / `DOCUMENT` discriminator.
+The external contract uses `first_name` and `last_name` for client names and `client_id` and
+`created_at` for document ownership/timestamps. `countryOfResidence` remains camelCase as specified
+by the supplied contract. Java records keep idiomatic camelCase component names, with Jackson
+annotations defining the wire representation; legacy camelCase client-name request fields remain
+accepted as aliases.
 
 ### `com.nevis.search.application`
 
@@ -315,6 +320,8 @@ independently to each result type, so the response can contain up to twice that 
 | `GET /search?q=...` | Searches clients and all-client documents; supports per-type `limit` |
 
 The configured default limit is `20`, and the configured maximum is `100`.
+OpenAPI annotations on the controllers document the actual `201`, `200`, `400`, `404`, and `500`
+responses and their response schemas.
 
 Request validation includes bounded names, email syntax, bounded title, non-blank content,
 configurable content size, non-blank searchable queries, maximum query length, valid UUIDs, and
@@ -327,8 +334,8 @@ timestamp, status, error, message, path, violations[]
 ```
 
 Malformed requests and validation failures return `400`. Unknown clients in document operations
-return `404`. Unexpected failures return a generic `500`; the response does not expose SQL or stack
-traces.
+return `404`, and unsupported request media types return `415`. Unexpected failures return a
+generic `500`; the response does not expose SQL or stack traces.
 
 ## 10. Configuration and runtime
 
@@ -340,7 +347,8 @@ local workflow.
 
 - pinned `postgres:17.6-alpine` with a health check and persistent volume;
 - an application image built by the repository `Dockerfile`;
-- port `8080` for the service and `5432` for local database access;
+- application port `8080`, mapped to host port `8080` by default and configurable with
+  `APP_HOST_PORT`, plus PostgreSQL port `5432` for local database access;
 - application startup after PostgreSQL becomes healthy;
 - automatic Flyway execution during Spring Boot startup.
 
@@ -366,7 +374,9 @@ Pure unit tests cover:
 - mapping-group expansion and negative expansion;
 - PostgreSQL stemming, title weighting, ranking, and no-result behaviour;
 - client-scope isolation versus intentional global scope;
-- API creation, validation, malformed JSON, unknown client, typed global results, and empty results.
+- API creation, validation, malformed JSON, unsupported media type, unknown client, typed global
+  results, and empty results;
+- the external snake_case JSON contract and generated OpenAPI models/status codes.
 
 The integration class uses `disabledWithoutDocker = true`: environments with Docker execute it;
 environments without Docker skip it instead of substituting H2.
@@ -374,16 +384,16 @@ environments without Docker skip it instead of substituting H2.
 Verification at the time this document was created:
 
 - `mvn verify` builds the executable JAR successfully;
-- all 16 tests pass on a Docker-enabled Ubuntu mini PC: 11 unit tests and 5 PostgreSQL/API
+- all 17 tests pass on a Docker-enabled Ubuntu mini PC: 11 unit tests and 6 PostgreSQL/API
   integration tests;
 - Testcontainers starts the pinned PostgreSQL 17.6 image, and Flyway applies `V1__initial_schema.sql`
   to an empty schema;
 - the Docker image builds and starts successfully with PostgreSQL from `compose.yaml`;
 - an HTTP smoke test verifies OpenAPI, client and document creation, company-domain search,
-  related-term document search, explicit client-scope isolation, validation `400`, and unknown-client
-  `404` responses;
-- the smoke container used host port `18080` because port `8080` on that machine was already occupied;
-  the repository's standard Compose mapping remains `8080:8080` as required.
+  related-term document search, and unsupported-media-type `415` handling;
+- at the user's direction, the verified mini-PC stack remains running on host port `18080` because
+  its existing `flashcards.service` occupies `8080`. The application listens on container port
+  `8080`; `APP_HOST_PORT` defaults to `8080` in the repository and was set to `18080` for this host.
 
 ## 12. Plan-to-implementation notes
 

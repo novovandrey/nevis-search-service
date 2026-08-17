@@ -1,11 +1,17 @@
 package com.nevis.search.api;
 
+import com.nevis.search.api.dto.ApiError;
 import com.nevis.search.api.dto.CreateDocumentRequest;
 import com.nevis.search.api.dto.DocumentResponse;
 import com.nevis.search.application.DocumentService;
 import com.nevis.search.config.SearchProperties;
 import com.nevis.search.domain.Document;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +40,23 @@ public class DocumentController {
 
     @PostMapping
     @Operation(summary = "Create a text document for a client")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Document created",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = DocumentResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Client not found",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "415", description = "Unsupported media type",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected server error",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)))
+    })
     public ResponseEntity<DocumentResponse> create(
             @PathVariable UUID clientId,
             @Valid @RequestBody CreateDocumentRequest request
@@ -46,6 +69,20 @@ public class DocumentController {
 
     @GetMapping
     @Operation(summary = "List or search documents belonging to one client")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Documents returned",
+                    content = @Content(mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = DocumentResponse.class)))),
+            @ApiResponse(responseCode = "400", description = "Invalid search or pagination parameters",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Client not found",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected server error",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)))
+    })
     public List<DocumentResponse> find(
             @PathVariable UUID clientId,
             @RequestParam(required = false) String q,

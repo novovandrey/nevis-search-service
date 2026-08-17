@@ -1,6 +1,7 @@
 package com.nevis.search.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.nevis.search.domain.Document;
 
 import java.time.Instant;
@@ -8,10 +9,10 @@ import java.util.UUID;
 
 public record DocumentResponse(
         UUID id,
-        UUID clientId,
+        @JsonProperty("client_id") UUID clientId,
         String title,
         String content,
-        Instant createdAt,
+        @JsonProperty("created_at") Instant createdAt,
         @JsonInclude(JsonInclude.Include.NON_NULL) Double relevance
 ) {
     public static DocumentResponse from(Document document) {
@@ -29,4 +30,3 @@ public record DocumentResponse(
         );
     }
 }
-

@@ -1,13 +1,14 @@
 package com.nevis.search.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.nevis.search.domain.Client;
 
 import java.util.UUID;
 
 public record ClientResponse(
         UUID id,
-        String firstName,
-        String lastName,
+        @JsonProperty("first_name") String firstName,
+        @JsonProperty("last_name") String lastName,
         String email,
         String countryOfResidence
 ) {
@@ -21,4 +22,3 @@ public record ClientResponse(
         );
     }
 }
-
