@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: nevis-search-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/nevis}
+    username: ${DB_USERNAME:nevis}
+    password: ${DB_PASSWORD:nevis}
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+
+nevis:
+  search:
+    max-query-length: ${MAX_QUERY_LENGTH:200}
+    default-limit: ${SEARCH_DEFAULT_LIMIT:20}
+    max-limit: ${SEARCH_MAX_LIMIT:100}
+  documents:
+    max-content-length: ${MAX_DOCUMENT_CONTENT_LENGTH:1000000}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
