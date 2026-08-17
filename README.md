@@ -4,7 +4,9 @@ Java 25 / Spring Boot service for creating clients, storing their text documents
 and searching documents with PostgreSQL Full Text Search.
 
 The as-built architecture is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The original agreed
-plan is preserved unchanged in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+plan is preserved unchanged in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md), and
+the strict company-domain client-search rules are in
+[`docs/CLIENT_SEARCH_PLAN.md`](docs/CLIENT_SEARCH_PLAN.md).
 
 ## Run locally
 
@@ -91,8 +93,8 @@ Find the client by a company-like query derived from the email domain:
 curl "http://localhost:8080/search?q=Nevis%20Wealth"
 ```
 
-The global endpoint returns one typed array. Client results come first in client-search relevance
-order, followed by document results in PostgreSQL FTS relevance order:
+The global endpoint returns one typed array. Exact company-domain client matches come first in
+deterministic name order, followed by document results in PostgreSQL FTS relevance order:
 
 ```json
 [
@@ -127,9 +129,11 @@ client returns `404`; invalid input returns `400`.
 
 ### `GET /search?q={query}`
 
-Searches clients and documents across all clients, as required by the assignment. Results have a
-`type` discriminator (`CLIENT` or `DOCUMENT`). The optional per-type `limit` defaults to `20`.
-Client and document relevance values are deliberately not exposed as one fake cross-type score.
+Searches clients by company derived from their email domain and searches documents across all
+clients, as required by the assignment. Client lookup does not search first name, last name, or
+full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`). The optional per-type
+`limit` defaults to `20`. Client and document relevance values are deliberately not exposed as one
+fake cross-type score.
 
 Validation and failures use a consistent response shape:
 

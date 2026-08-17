@@ -22,6 +22,7 @@ public class SearchService {
     private static final Logger log = LoggerFactory.getLogger(SearchService.class);
 
     private final QueryNormalizer queryNormalizer;
+    private final ClientSearchQueryNormalizer clientSearchQueryNormalizer;
     private final QueryExpander queryExpander;
     private final ClientSearchPort clientSearchPort;
     private final DocumentSearchPort documentSearchPort;
@@ -29,12 +30,14 @@ public class SearchService {
 
     public SearchService(
             QueryNormalizer queryNormalizer,
+            ClientSearchQueryNormalizer clientSearchQueryNormalizer,
             QueryExpander queryExpander,
             ClientSearchPort clientSearchPort,
             DocumentSearchPort documentSearchPort,
             SearchProperties searchProperties
     ) {
         this.queryNormalizer = queryNormalizer;
+        this.clientSearchQueryNormalizer = clientSearchQueryNormalizer;
         this.queryExpander = queryExpander;
         this.clientSearchPort = clientSearchPort;
         this.documentSearchPort = documentSearchPort;
@@ -48,7 +51,10 @@ public class SearchService {
 
         Instant startedAt = Instant.now();
         SearchQuery query = queryNormalizer.normalize(rawQuery);
-        List<ClientSearchResult> clients = clientSearchPort.search(query, limit);
+        List<ClientSearchResult> clients = clientSearchPort.search(clientSearchQueryNormalizer.normalize(rawQuery))
+                .stream()
+                .limit(limit)
+                .toList();
         List<DocumentSearchResult> documents = documentSearchPort.search(
                 queryExpander.expand(query), new DocumentSearchScope.AllClients(), limit
         );

@@ -18,12 +18,6 @@ class QueryNormalizerTest {
     }
 
     @Test
-    void preservesEmailSyntaxForExactClientMatching() {
-        assertThat(normalizer.normalize(" Anton.Batiaev@NevisWealth.com ").value())
-                .isEqualTo("anton.batiaev@neviswealth.com");
-    }
-
-    @Test
     void rejectsBlankPunctuationOnlyAndLongQueries() {
         assertThatThrownBy(() -> normalizer.normalize("  "))
                 .isInstanceOf(InvalidRequestException.class);

@@ -1,12 +1,11 @@
 package com.nevis.search.application.port;
 
 import com.nevis.search.domain.ClientSearchResult;
-import com.nevis.search.domain.SearchQuery;
+import com.nevis.search.domain.ClientSearchQuery;
 
 import java.util.List;
 
 public interface ClientSearchPort {
 
-    List<ClientSearchResult> search(SearchQuery query, int limit);
+    List<ClientSearchResult> search(ClientSearchQuery query);
 }
-

@@ -3,8 +3,9 @@
 > Status: implementation architecture as of 2026-08-17.
 >
 > The original agreed plan is preserved unchanged in
-> [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). This document describes the code that actually
-> exists in the repository.
+> [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). The narrower client-search requirements in
+> [`CLIENT_SEARCH_PLAN.md`](CLIENT_SEARCH_PLAN.md) supersede the original plan for that capability.
+> This document describes the code that actually exists in the repository.
 
 ## 1. Implemented scope
 
@@ -14,7 +15,7 @@ The service implements:
 - creation of text documents owned by a client;
 - listing and full-text searching of one client's documents;
 - global client and document search through a typed result array;
-- deterministic client discovery by name, email, and company-like email-domain queries;
+- deterministic client discovery only by company keys derived from corporate email domains;
 - deterministic business-term expansion backed by PostgreSQL;
 - Flyway-managed PostgreSQL schema and seed data;
 - OpenAPI/Swagger documentation;
@@ -89,6 +90,7 @@ API DTOs are separate from domain records. Global search uses the sealed
 | `DocumentService` | verifies client existence, creates/lists documents, enforces client scope |
 | `SearchService` | orchestrates global client and all-client document search |
 | `QueryNormalizer` | canonicalizes and validates raw queries |
+| `ClientSearchQueryNormalizer` | converts company queries to exact comparison keys |
 | `QueryExpander` | combines the original query with explicit related business terms |
 
 `ClientNotFoundException` and `InvalidRequestException` represent expected application failures.
@@ -99,7 +101,7 @@ API DTOs are separate from domain records. Global search uses the sealed
 |---|---|
 | `ClientRepository` | client persistence and existence checks |
 | `DocumentRepository` | document persistence and client-scoped listing |
-| `ClientSearchPort` | ranked client discovery |
+| `ClientSearchPort` | exact company-domain client discovery |
 | `DocumentSearchPort` | ranked document search for an explicit scope |
 | `QueryExpansionPort` | lookup of related business terms |
 
@@ -111,7 +113,7 @@ CRUD and search remain separate capabilities even though PostgreSQL currently im
 |---|---|
 | `PostgresClientRepository` | JDBC client inserts/lookups |
 | `PostgresDocumentRepository` | JDBC document inserts/lookups and explicit client list query |
-| `PostgresClientSearchAdapter` | normalized relational matching and deterministic ranking |
+| `PostgresClientSearchAdapter` | exact company-key matching derived from email domains |
 | `PostgresDocumentSearchAdapter` | PostgreSQL FTS, ranking, and scope predicate |
 | `PostgresQueryExpansionAdapter` | group lookup in `search_term_mapping` |
 
@@ -148,6 +150,8 @@ DocumentSearchScope
 
 There is no Tenant entity, hidden client context, `ThreadLocal`, authentication scope, RLS, or
 database-per-client routing.
+
+Client search uses a separate `ClientSearchQuery` value containing the normalized company key.
 
 ## 6. PostgreSQL schema
 
@@ -199,7 +203,16 @@ Adding a term requires one row rather than pairwise synonym mappings.
 5. requires at least one letter or digit;
 6. enforces `MAX_QUERY_LENGTH`, default `200`.
 
-Email punctuation (`@` and `.`) is retained so exact email matching remains possible.
+`ClientSearchQueryNormalizer` separately normalizes a human company query by trimming it,
+lowercasing it with `Locale.ROOT`, and removing whitespace. It does not remove other punctuation or
+apply fuzzy matching. Thus all of these produce `neviswealth`:
+
+```text
+Nevis Wealth
+nevis wealth
+NEVIS WEALTH
+neviswealth
+```
 
 ### 7.2 Business-term expansion
 
@@ -209,21 +222,18 @@ the result. Expansion is one level only and performs no fuzzy or recursive infer
 
 ### 7.3 Client search
 
-`PostgresClientSearchAdapter` derives a compact alphanumeric query and compact email domain in SQL.
-For example:
+`PostgresClientSearchAdapter` validates the stored email shape defensively, extracts the domain,
+lowercases it, and removes its final top-level-domain segment. For example:
 
 ```text
 Nevis Wealth -> neviswealth
-anton.batiaev@neviswealth.com -> neviswealthcom
+anton.batiaev@neviswealth.com -> neviswealth.com -> neviswealth
 ```
 
-Candidates match exact email, compact domain, first name, last name, or full name. Ordering is:
-
-1. exact full email;
-2. exact/prefix compact domain;
-3. name prefix;
-4. other contains match;
-5. last name, first name, and UUID as deterministic tie-breakers.
+Only exact equality between the normalized query and derived company key matches. There is no
+contains/prefix/fuzzy matching and no client lookup by first name, last name, or full email. Rows
+with malformed email values or domains that cannot produce a key are ignored rather than failing
+the entire search. Multiple exact company matches are ordered by last name, first name, and UUID.
 
 ### 7.4 Document FTS
 
@@ -288,11 +298,11 @@ sequenceDiagram
 
 ### Global search
 
-`SearchService` normalizes once, calls `ClientSearchPort`, expands document terms, calls
-`DocumentSearchPort` with `AllClients`, and returns the two result groups without inventing a shared
-score. `SearchController` serializes client results first and document results second. The supplied
-`limit` applies independently to each result type, so the response can contain up to twice that
-number of items.
+`SearchService` creates a company-specific `ClientSearchQuery`, separately normalizes the document
+query, calls `ClientSearchPort`, expands document terms, calls `DocumentSearchPort` with
+`AllClients`, and returns the two result groups without inventing a shared score. `SearchController`
+serializes client results first and document results second. The supplied `limit` applies
+independently to each result type, so the response can contain up to twice that number of items.
 
 ## 9. HTTP API as implemented
 
@@ -341,8 +351,9 @@ The Dockerfile is a multi-stage Java 25 build. The runtime process uses numeric 
 
 Pure unit tests cover:
 
-- normalization, separator handling, email preservation, blank/punctuation-only input, and maximum
-  query length;
+- document-query normalization, separator handling, blank/punctuation-only input, and maximum query
+  length;
+- company-query case/whitespace normalization and the deliberate absence of fuzzy punctuation rules;
 - expansion, original-term preservation, and deduplication;
 - global-search orchestration and `AllClients` scope selection;
 - client-scoped search propagation, unknown-client handling, and content-size enforcement.
@@ -350,7 +361,8 @@ Pure unit tests cover:
 `NevisPostgresIntegrationTest` uses a real PostgreSQL Testcontainer and covers:
 
 - Flyway migrations, generated search vector, and foreign-key enforcement;
-- company-domain, exact-email, and name client search;
+- exact company-domain search, non-matches, exclusion of name/full-email lookup, and malformed stored
+  email handling;
 - mapping-group expansion and negative expansion;
 - PostgreSQL stemming, title weighting, ranking, and no-result behaviour;
 - client-scope isolation versus intentional global scope;
@@ -362,7 +374,7 @@ environments without Docker skip it instead of substituting H2.
 Verification at the time this document was created:
 
 - `mvn verify` builds the executable JAR successfully;
-- all 14 tests pass on a Docker-enabled Ubuntu mini PC: 9 unit tests and 5 PostgreSQL/API
+- all 16 tests pass on a Docker-enabled Ubuntu mini PC: 11 unit tests and 5 PostgreSQL/API
   integration tests;
 - Testcontainers starts the pinned PostgreSQL 17.6 image, and Flyway applies `V1__initial_schema.sql`
   to an empty schema;
@@ -377,6 +389,10 @@ Verification at the time this document was created:
 
 The implementation preserves the plan's boundaries. Equivalent concrete choices are:
 
+- `CLIENT_SEARCH_PLAN.md` deliberately narrows the older plan: client lookup is company-domain only;
+  earlier name and full-email matching was removed after this product decision was made explicit;
+- `ClientSearchPort` uses the plan's `search(ClientSearchQuery)` shape; the global result limit is
+  applied by `SearchService` without leaking it into the company-search capability;
 - `DocumentSearchPort` receives the already expanded `Set<String>` plus explicit scope and limit;
   PostgreSQL query construction remains in the adapter;
 - expanded alternatives use separate safe `websearch_to_tsquery` values and maximum matching rank,

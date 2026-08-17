@@ -25,7 +25,7 @@ public class SearchController {
     }
 
     @GetMapping("/search")
-    @Operation(summary = "Search clients and documents globally")
+    @Operation(summary = "Search clients by company domain and documents globally")
     public List<SearchResultResponse> search(
             @RequestParam String q,
             @RequestParam(required = false) Integer limit

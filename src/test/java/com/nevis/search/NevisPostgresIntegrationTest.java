@@ -1,6 +1,7 @@
 package com.nevis.search;
 
 import com.nevis.search.application.ClientService;
+import com.nevis.search.application.ClientSearchQueryNormalizer;
 import com.nevis.search.application.DocumentService;
 import com.nevis.search.application.QueryExpander;
 import com.nevis.search.application.QueryNormalizer;
@@ -72,6 +73,9 @@ class NevisPostgresIntegrationTest {
     QueryNormalizer queryNormalizer;
 
     @Autowired
+    ClientSearchQueryNormalizer clientSearchQueryNormalizer;
+
+    @Autowired
     QueryExpander queryExpander;
 
     @Autowired
@@ -110,23 +114,29 @@ class NevisPostgresIntegrationTest {
     }
 
     @Test
-    void clientSearchMatchesCompanyDomainEmailAndNamesDeterministically() {
+    void clientSearchMatchesOnlyNormalizedCompanyDomainAndIgnoresUnexpectedEmails() {
         Client nevis = clientService.create(
                 "Anton", "Batiaev", "anton.batiaev@neviswealth.com", "UK"
         );
         clientService.create("Other", "Person", "other@example.com", null);
+        clientService.create("Near", "Match", "near@myneviswealth.com", null);
+        jdbcClient.sql("""
+                        INSERT INTO clients (id, first_name, last_name, email, country_of_residence)
+                        VALUES (:id, 'Malformed', 'Email', 'unexpected-email-value', NULL)
+                        """)
+                .param("id", UUID.randomUUID())
+                .update();
 
-        assertThat(clientSearchPort.search(queryNormalizer.normalize("Nevis Wealth"), 20))
-                .extracting(result -> result.client().id())
-                .containsExactly(nevis.id());
-        assertThat(clientSearchPort.search(queryNormalizer.normalize("ANTON.BATIAEV@NEVISWEALTH.COM"), 20))
-                .first()
-                .extracting(result -> result.relevanceOrder())
-                .isEqualTo(1);
-        assertThat(clientSearchPort.search(queryNormalizer.normalize("Batiaev"), 20))
-                .extracting(result -> result.client().id())
-                .containsExactly(nevis.id());
-        assertThat(clientSearchPort.search(queryNormalizer.normalize("missing"), 20)).isEmpty();
+        for (String query : List.of("Nevis Wealth", "nevis wealth", "NEVIS WEALTH", "neviswealth")) {
+            assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize(query)))
+                    .extracting(result -> result.client().id())
+                    .containsExactly(nevis.id());
+        }
+        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Other Company"))).isEmpty();
+        assertThat(clientSearchPort.search(
+                clientSearchQueryNormalizer.normalize("ANTON.BATIAEV@NEVISWEALTH.COM")
+        )).isEmpty();
+        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Batiaev"))).isEmpty();
     }
 
     @Test
@@ -217,6 +227,14 @@ class NevisPostgresIntegrationTest {
         mockMvc.perform(get("/search").param("q", "Nevis Wealth"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].type", hasItem("CLIENT")));
+
+        mockMvc.perform(get("/search").param("q", "Batiaev"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mockMvc.perform(get("/search").param("q", "anton.batiaev@neviswealth.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
 
         mockMvc.perform(get("/search").param("q", "address proof"))
                 .andExpect(status().isOk())
