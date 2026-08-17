@@ -362,11 +362,16 @@ environments without Docker skip it instead of substituting H2.
 Verification at the time this document was created:
 
 - `mvn verify` builds the executable JAR successfully;
-- 9 unit tests pass;
-- 5 PostgreSQL/API integration tests compile but were skipped on the current workstation because
-  Docker was not installed;
-- a `docker compose up --build` smoke test therefore remains to be run in a Docker-enabled
-  environment.
+- all 14 tests pass on a Docker-enabled Ubuntu mini PC: 9 unit tests and 5 PostgreSQL/API
+  integration tests;
+- Testcontainers starts the pinned PostgreSQL 17.6 image, and Flyway applies `V1__initial_schema.sql`
+  to an empty schema;
+- the Docker image builds and starts successfully with PostgreSQL from `compose.yaml`;
+- an HTTP smoke test verifies OpenAPI, client and document creation, company-domain search,
+  related-term document search, explicit client-scope isolation, validation `400`, and unknown-client
+  `404` responses;
+- the smoke container used host port `18080` because port `8080` on that machine was already occupied;
+  the repository's standard Compose mapping remains `8080:8080` as required.
 
 ## 12. Plan-to-implementation notes
 
@@ -381,8 +386,7 @@ The implementation preserves the plan's boundaries. Equivalent concrete choices 
 - optional summarization was intentionally left out after the core implementation.
 
 No unresolved discrepancy between the agreed architectural boundaries and the implementation is
-known. The only incomplete verification item is the Docker-dependent integration/smoke execution
-described above.
+known. Docker-dependent integration and smoke verification have been completed.
 
 ## 13. Deliberate non-goals
 
