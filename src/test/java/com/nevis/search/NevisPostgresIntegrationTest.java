@@ -336,6 +336,9 @@ class NevisPostgresIntegrationTest {
     void openApiDocumentsJsonContractAndActualResponseStatuses() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.openapi").value("3.1.0"))
+                .andExpect(jsonPath("$.info.title").value("API"))
+                .andExpect(jsonPath("$.info.version").value("1.0.0"))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name").exists())
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.last_name").exists())
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name.minLength")

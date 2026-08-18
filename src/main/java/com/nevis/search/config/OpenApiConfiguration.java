@@ -11,8 +11,8 @@ public class OpenApiConfiguration {
     @Bean
     OpenAPI nevisOpenApi() {
         return new OpenAPI().info(new Info()
-                .title("Nevis Search Service API")
-                .version("1.0")
+                .title("API")
+                .version("1.0.0")
                 .description("Client creation, text-document storage, client discovery, and PostgreSQL FTS."));
     }
 }
