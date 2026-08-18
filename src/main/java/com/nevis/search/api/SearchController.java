@@ -6,6 +6,7 @@ import com.nevis.search.api.dto.DocumentSearchResponse;
 import com.nevis.search.api.dto.SearchResultResponse;
 import com.nevis.search.application.SearchService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,6 +42,10 @@ public class SearchController {
                             schema = @Schema(implementation = ApiError.class)))
     })
     public List<SearchResultResponse> search(
+            @Parameter(
+                    description = "Search query, limited to 255 characters",
+                    schema = @Schema(type = "string", maxLength = 255)
+            )
             @RequestParam String q
     ) {
         SearchService.GlobalSearchResults results = searchService.search(q);

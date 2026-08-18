@@ -174,6 +174,32 @@ class NevisPostgresIntegrationTest {
     }
 
     @Test
+    void apiKeepsSearchQueryAndDocumentTitleLimitsConsistent() throws Exception {
+        Client client = clientService.create("Length", "Tester", "length@example.com", null);
+        String title = "a".repeat(255);
+
+        String documentBody = mockMvc.perform(post("/clients/{id}/documents", client.id())
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"%s","content":"Full-length title test document"}
+                                """.formatted(title)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String documentId = com.jayway.jsonpath.JsonPath.read(documentBody, "$.id");
+
+        mockMvc.perform(get("/search").param("q", title))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].type").value("DOCUMENT"))
+                .andExpect(jsonPath("$[0].id").value(documentId));
+
+        mockMvc.perform(get("/search").param("q", "a".repeat(256)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Search query must not exceed 255 characters"));
+    }
+
+    @Test
     void apiCoversCreationValidationUnknownClientAndGlobalSearch() throws Exception {
         String clientBody = mockMvc.perform(post("/clients")
                         .contentType("application/json")
@@ -293,6 +319,7 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.paths['/search'].get.responses['400']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['500']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.parameters.length()").value(1))
-                .andExpect(jsonPath("$.paths['/search'].get.parameters[0].name").value("q"));
+                .andExpect(jsonPath("$.paths['/search'].get.parameters[0].name").value("q"))
+                .andExpect(jsonPath("$.paths['/search'].get.parameters[0].schema.maxLength").value(255));
     }
 }

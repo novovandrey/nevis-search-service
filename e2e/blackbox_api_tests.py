@@ -171,7 +171,9 @@ def run(base_url: str) -> None:
     token = uuid.uuid4().hex[:12]
 
     client_email = f"acceptance-{token}@neviswealth.com"
-    document_title = f"Household Statement {token}"
+    document_title_prefix = f"Household Statement {token} "
+    document_title = document_title_prefix + "a" * (255 - len(document_title_prefix))
+    check(len(document_title) == 255, "Test setup must create a 255-character title")
 
     # Important: deliberately contains "utility bill", but NOT "address" or "proof".
     # This makes the synonym/similar-term check meaningful.
@@ -193,6 +195,15 @@ def run(base_url: str) -> None:
     response = request(base_url, "GET", "/search")
     expect_status(response, 400)
     print("PASS GET /search requires q")
+
+    response = request(base_url, "GET", f"/search?q={'a' * 256}")
+    expect_status(response, 400)
+    check(
+        isinstance(response.body, dict)
+        and response.body.get("message") == "Search query must not exceed 255 characters",
+        f"GET /search must reject 256-character queries. Body: {response.raw}",
+    )
+    print("PASS GET /search rejects 256-character queries")
 
     response = request(
         base_url,
@@ -263,6 +274,21 @@ def run(base_url: str) -> None:
         )
 
     print(f"PASS document created: {document_id}")
+
+    # ------------------------------------------------------------------
+    # Query/title length consistency
+    # ------------------------------------------------------------------
+
+    response = request(base_url, "GET", f"/search?q={quote(document_title)}")
+    expect_status(response, 200)
+    check(
+        contains_entity_with_id(response.body, document_id),
+        (
+            "A document with a 255-character title was not returned when searched "
+            f"with its complete title. Body: {response.raw}"
+        ),
+    )
+    print("PASS 255-character document title is accepted and searchable in full")
 
     # ------------------------------------------------------------------
     # Client/company search requirement

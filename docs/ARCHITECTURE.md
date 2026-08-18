@@ -199,7 +199,7 @@ Adding a term requires one row rather than pairwise synonym mappings.
 3. converts `-`, `_`, `/`, and `\` separators to spaces;
 4. collapses repeated whitespace;
 5. requires at least one letter or digit;
-6. enforces `MAX_QUERY_LENGTH`, default `200`.
+6. enforces `MAX_QUERY_LENGTH`, default `255`.
 
 `ClientSearchQueryNormalizer` separately normalizes a human company query by trimming it,
 lowercasing it with `Locale.ROOT`, and removing whitespace. It does not remove other punctuation or

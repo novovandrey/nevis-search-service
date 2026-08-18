@@ -22,7 +22,7 @@ class SearchServiceTest {
 
     @Test
     void orchestratesClientAndDocumentSearchWithoutMergingScores() {
-        SearchProperties properties = new SearchProperties(200);
+        SearchProperties properties = new SearchProperties(255);
         QueryNormalizer normalizer = new QueryNormalizer(properties);
         ClientSearchQueryNormalizer clientNormalizer = new ClientSearchQueryNormalizer(properties);
         QueryExpander expander = new QueryExpander(query -> Set.of("utility bill"));

@@ -190,7 +190,7 @@ Validation and failures use a consistent response shape:
 | `DB_USERNAME` | `nevis` | Database username |
 | `DB_PASSWORD` | `nevis` | Database password |
 | `SERVER_PORT` | `8080` | HTTP port |
-| `MAX_QUERY_LENGTH` | `200` | Maximum normalized query length |
+| `MAX_QUERY_LENGTH` | `255` | Maximum normalized query length |
 | `MAX_DOCUMENT_CONTENT_LENGTH` | `1000000` | Maximum document content length |
 
 ## Architecture decisions

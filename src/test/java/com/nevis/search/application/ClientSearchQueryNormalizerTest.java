@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ClientSearchQueryNormalizerTest {
 
     private final ClientSearchQueryNormalizer normalizer =
-            new ClientSearchQueryNormalizer(new SearchProperties(50));
+            new ClientSearchQueryNormalizer(new SearchProperties(255));
 
     @Test
     void normalizesEquivalentCompanyQueriesToTheSameKey() {
@@ -27,12 +27,14 @@ class ClientSearchQueryNormalizerTest {
     }
 
     @Test
-    void rejectsBlankPunctuationOnlyAndLongQueries() {
+    void accepts255CharacterQueriesAndRejectsLongerQueries() {
         assertThatThrownBy(() -> normalizer.normalize("  "))
                 .isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(() -> normalizer.normalize("..."))
                 .isInstanceOf(InvalidRequestException.class);
-        assertThatThrownBy(() -> normalizer.normalize("a".repeat(51)))
-                .isInstanceOf(InvalidRequestException.class);
+        assertThat(normalizer.normalize("a".repeat(255)).value()).hasSize(255);
+        assertThatThrownBy(() -> normalizer.normalize("a".repeat(256)))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Search query must not exceed 255 characters");
     }
 }
