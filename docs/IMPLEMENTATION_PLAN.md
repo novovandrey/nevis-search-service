@@ -815,30 +815,6 @@ The take-home deals with text content, not binary files.
 
 Use a documented configurable maximum request/content size rather than accepting unbounded document text.
 
-### 14.3 `GET /clients/{clientId}/documents`
-
-Extension supporting the expected product workflow.
-
-Examples:
-
-```http
-GET /clients/{clientId}/documents
-```
-
-lists that client's documents.
-
-```http
-GET /clients/{clientId}/documents?q=address%20proof
-```
-
-searches only that client's documents.
-
-Expected behaviour:
-
-- `200 OK` with a list;
-- `404 Not Found` if the client itself does not exist;
-- never return another client's documents in this endpoint.
-
 ### 14.4 Required global `GET /search`
 
 Keep the endpoint supplied by the assignment:
@@ -1215,7 +1191,6 @@ Document at least:
 ```text
 POST /clients
 POST /clients/{id}/documents
-GET  /clients/{clientId}/documents
 GET  /search
 ```
 
