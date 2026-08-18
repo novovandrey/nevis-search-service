@@ -333,6 +333,62 @@ class NevisPostgresIntegrationTest {
     }
 
     @Test
+    void apiRejectsNonStringJsonValuesForStringRequestFields() throws Exception {
+        mockMvc.perform(post("/clients")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "first_name": 123,
+                                  "last_name": "Smith",
+                                  "email": "john@example.com"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Malformed request"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.trace").doesNotExist());
+
+        mockMvc.perform(post("/clients")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "first_name": true,
+                                  "last_name": "Smith",
+                                  "email": "john@example.com"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Malformed request"));
+
+        Client client = clientService.create("Strict", "Types", "strict-types@example.com", null);
+
+        mockMvc.perform(post("/clients/{id}/documents", client.id())
+                        .contentType("application/json")
+                        .content("""
+                                {"title":123,"content":"abc"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Malformed request"));
+
+        mockMvc.perform(post("/clients/{id}/documents", client.id())
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"Valid title","content":123}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Malformed request"));
+
+        mockMvc.perform(post("/clients/{id}/documents", client.id())
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"123","content":"abc"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("123"))
+                .andExpect(jsonPath("$.content").value("abc"));
+    }
+
+    @Test
     void openApiDocumentsJsonContractAndActualResponseStatuses() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -340,7 +396,11 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.info.title").value("API"))
                 .andExpect(jsonPath("$.info.version").value("1.0.0"))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name").exists())
+                .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name.type")
+                        .value("string"))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.last_name").exists())
+                .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.last_name.type")
+                        .value("string"))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name.minLength")
                         .value(1))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.first_name.maxLength")
@@ -351,8 +411,16 @@ class NevisPostgresIntegrationTest {
                         .value(100))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.email.minLength").value(1))
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.email.maxLength").value(254))
+                .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.email.type")
+                        .value("string"))
+                .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.countryOfResidence.type")
+                        .value("string"))
                 .andExpect(jsonPath("$.components.schemas.CreateDocumentRequest.properties.title.minLength").value(1))
                 .andExpect(jsonPath("$.components.schemas.CreateDocumentRequest.properties.title.maxLength").value(255))
+                .andExpect(jsonPath("$.components.schemas.CreateDocumentRequest.properties.title.type")
+                        .value("string"))
+                .andExpect(jsonPath("$.components.schemas.CreateDocumentRequest.properties.content.type")
+                        .value("string"))
                 .andExpect(jsonPath("$.components.schemas.DocumentResponse.properties.client_id").exists())
                 .andExpect(jsonPath("$.components.schemas.DocumentResponse.properties.created_at").exists())
                 .andExpect(jsonPath("$.components.schemas.DocumentSearchResponse.properties.content").exists())

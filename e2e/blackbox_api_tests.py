@@ -218,6 +218,37 @@ def run(base_url: str) -> None:
     expect_status(response, 400)
     print("PASS POST /clients validates required fields")
 
+    response = request(
+        base_url,
+        "POST",
+        "/clients",
+        {
+            "first_name": 123,
+            "last_name": "Tester",
+            "email": f"wrong-type-{token}@example.com",
+        },
+    )
+    expect_status(response, 400)
+    check(
+        isinstance(response.body, dict)
+        and response.body.get("message") == "Malformed request",
+        f"Numeric first_name must be rejected as malformed request. Body: {response.raw}",
+    )
+    print("PASS POST /clients rejects numeric string fields")
+
+    response = request(
+        base_url,
+        "POST",
+        "/clients",
+        {
+            "first_name": True,
+            "last_name": "Tester",
+            "email": f"wrong-type-bool-{token}@example.com",
+        },
+    )
+    expect_status(response, 400)
+    print("PASS POST /clients rejects boolean string fields")
+
     # ------------------------------------------------------------------
     # Create client
     # ------------------------------------------------------------------
@@ -245,6 +276,29 @@ def run(base_url: str) -> None:
         f"Created client email mismatch. Body: {response.raw}",
     )
     print(f"PASS client created: {client_id}")
+
+    response = request(
+        base_url,
+        "POST",
+        f"/clients/{quote(client_id, safe='')}/documents",
+        {"title": 123, "content": "abc"},
+    )
+    expect_status(response, 400)
+    check(
+        isinstance(response.body, dict)
+        and response.body.get("message") == "Malformed request",
+        f"Numeric title must be rejected as malformed request. Body: {response.raw}",
+    )
+    print("PASS POST document rejects numeric title")
+
+    response = request(
+        base_url,
+        "POST",
+        f"/clients/{quote(client_id, safe='')}/documents",
+        {"title": "Valid title", "content": 123},
+    )
+    expect_status(response, 400)
+    print("PASS POST document rejects numeric content")
 
     # ------------------------------------------------------------------
     # Create document
