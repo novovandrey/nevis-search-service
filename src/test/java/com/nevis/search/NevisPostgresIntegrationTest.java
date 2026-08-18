@@ -11,7 +11,6 @@ import com.nevis.search.application.port.DocumentSearchPort;
 import com.nevis.search.domain.Client;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentSearchResult;
-import com.nevis.search.domain.DocumentSearchScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -140,27 +139,15 @@ class NevisPostgresIntegrationTest {
     }
 
     @Test
-    void businessTermsUseOrSemanticsAndClientScopeNeverLeaksDocuments() {
+    void businessTermsUseOrSemanticsAndGlobalSearchIncludesMatchingDocuments() {
         Client clientA = clientService.create("Client", "A", "a@example.com", null);
         Client clientB = clientService.create("Client", "B", "b@example.com", null);
         Document utilityBill = documentService.create(
                 clientA.id(), "Utility Bill", "Electricity charges for the current residence"
         );
-        documentService.create(
+        Document addressProof = documentService.create(
                 clientB.id(), "Address Proof Address Proof", "Utility bill and bank statement address proof"
         );
-
-        List<DocumentSearchResult> clientAResults = documentService.search(clientA.id(), "address proof", 20);
-        List<DocumentSearchResult> clientBResults = documentService.search(clientB.id(), "proof of residency", 20);
-
-        assertThat(clientAResults).extracting(result -> result.document().id()).containsExactly(utilityBill.id());
-        assertThat(clientAResults).allSatisfy(result ->
-                assertThat(result.document().clientId()).isEqualTo(clientA.id()));
-        assertThat(clientBResults).allSatisfy(result ->
-                assertThat(result.document().clientId()).isEqualTo(clientB.id()));
-        assertThat(documentService.list(clientA.id(), 20, 0))
-                .extracting(Document::clientId)
-                .containsOnly(clientA.id());
 
         Set<String> expanded = queryExpander.expand(queryNormalizer.normalize("bank statement"));
         assertThat(expanded).contains(
@@ -169,8 +156,8 @@ class NevisPostgresIntegrationTest {
         assertThat(queryExpander.expand(queryNormalizer.normalize("passport"))).containsExactly("passport");
 
         assertThat(searchService.search("address proof", 20).documents())
-                .extracting(result -> result.document().clientId())
-                .contains(clientA.id(), clientB.id());
+                .extracting(result -> result.document().id())
+                .contains(utilityBill.id(), addressProof.id());
     }
 
     @Test
@@ -180,19 +167,19 @@ class NevisPostgresIntegrationTest {
         Document contentMatch = documentService.create(client.id(), "Identity Record", "Contains a passport copy");
 
         List<DocumentSearchResult> results = documentSearchPort.search(
-                Set.of("passports"), new DocumentSearchScope.Client(client.id()), 20
+                Set.of("passports"), 20
         );
 
         assertThat(results).extracting(result -> result.document().id())
                 .containsExactly(titleMatch.id(), contentMatch.id());
         assertThat(results.getFirst().relevance()).isGreaterThan(results.getLast().relevance());
         assertThat(documentSearchPort.search(
-                Set.of("unfindable"), new DocumentSearchScope.AllClients(), 20
+                Set.of("unfindable"), 20
         )).isEmpty();
     }
 
     @Test
-    void apiCoversCreationValidationUnknownClientScopedAndGlobalSearch() throws Exception {
+    void apiCoversCreationValidationUnknownClientAndGlobalSearch() throws Exception {
         String clientBody = mockMvc.perform(post("/clients")
                         .contentType("application/json")
                         .content("""
@@ -222,11 +209,6 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.client_id").value(clientId))
                 .andExpect(jsonPath("$.content").value("Electricity bill for this address"))
                 .andExpect(jsonPath("$.created_at").exists());
-
-        mockMvc.perform(get("/clients/{clientId}/documents", clientId).param("q", "address proof"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].title").value("Utility Bill"))
-                .andExpect(jsonPath("$[0].relevance").isNumber());
 
         mockMvc.perform(get("/search").param("q", "Nevis Wealth"))
                 .andExpect(status().isOk())
@@ -299,7 +281,7 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['404']").exists())
                 .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['415']").exists())
-                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].get.responses['200']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].get").doesNotExist())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['400']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['500']").exists());

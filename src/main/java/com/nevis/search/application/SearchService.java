@@ -6,7 +6,6 @@ import com.nevis.search.application.port.DocumentSearchPort;
 import com.nevis.search.config.SearchProperties;
 import com.nevis.search.domain.ClientSearchResult;
 import com.nevis.search.domain.DocumentSearchResult;
-import com.nevis.search.domain.DocumentSearchScope;
 import com.nevis.search.domain.SearchQuery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,9 +54,7 @@ public class SearchService {
                 .stream()
                 .limit(limit)
                 .toList();
-        List<DocumentSearchResult> documents = documentSearchPort.search(
-                queryExpander.expand(query), new DocumentSearchScope.AllClients(), limit
-        );
+        List<DocumentSearchResult> documents = documentSearchPort.search(queryExpander.expand(query), limit);
         log.debug("Global search completed in {} ms", Duration.between(startedAt, Instant.now()).toMillis());
         return new GlobalSearchResults(clients, documents);
     }

@@ -5,6 +5,8 @@
 > The original agreed plan is preserved unchanged in
 > [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). The narrower client-search requirements in
 > [`CLIENT_SEARCH_PLAN.md`](CLIENT_SEARCH_PLAN.md) supersede the original plan for that capability.
+> [`search-api-cleanup-plan.md`](search-api-cleanup-plan.md) supersedes it for the removed
+> client-specific document `GET` endpoint.
 > This document describes the code that actually exists in the repository.
 
 ## 1. Implemented scope
@@ -13,7 +15,6 @@ The service implements:
 
 - client creation;
 - creation of text documents owned by a client;
-- listing and full-text searching of one client's documents;
 - global client and document search through a typed result array;
 - deterministic client discovery only by company keys derived from corporate email domains;
 - deterministic business-term expansion backed by PostgreSQL;
@@ -50,7 +51,7 @@ runtime wiring, but application services depend only on application ports and do
 flowchart TB
     HTTP["HTTP clients"] --> API["API controllers and DTOs"]
     API --> APP["Application services"]
-    APP --> DOMAIN["Domain records and explicit search scope"]
+    APP --> DOMAIN["Domain records and query values"]
     APP --> PORTS["Application ports"]
     PGADAPTERS["PostgreSQL adapters"] -. "implement" .-> PORTS
     PGADAPTERS --> PG[("PostgreSQL")]
@@ -74,7 +75,7 @@ PostgreSQL-specific FTS syntax remains under `infrastructure.postgres` and in Fl
 | Component | Responsibility |
 |---|---|
 | `ClientController` | `POST /clients` |
-| `DocumentController` | document creation, client-scoped list, client-scoped search |
+| `DocumentController` | document creation for an explicit client |
 | `SearchController` | global client/document search facade |
 | `ApiExceptionHandler` | consistent `400`, `404`, and safe `500` responses |
 | `api.dto` | validated request DTOs and external response models |
@@ -92,7 +93,7 @@ accepted as aliases.
 | Component | Responsibility |
 |---|---|
 | `ClientService` | creates clients and delegates persistence |
-| `DocumentService` | verifies client existence, creates/lists documents, enforces client scope |
+| `DocumentService` | verifies client existence and creates documents |
 | `SearchService` | orchestrates global client and all-client document search |
 | `QueryNormalizer` | canonicalizes and validates raw queries |
 | `ClientSearchQueryNormalizer` | converts company queries to exact comparison keys |
@@ -105,9 +106,9 @@ accepted as aliases.
 | Port | Capability |
 |---|---|
 | `ClientRepository` | client persistence and existence checks |
-| `DocumentRepository` | document persistence and client-scoped listing |
+| `DocumentRepository` | document persistence |
 | `ClientSearchPort` | exact company-domain client discovery |
-| `DocumentSearchPort` | ranked document search for an explicit scope |
+| `DocumentSearchPort` | ranked all-client document search |
 | `QueryExpansionPort` | lookup of related business terms |
 
 CRUD and search remain separate capabilities even though PostgreSQL currently implements both.
@@ -117,9 +118,9 @@ CRUD and search remain separate capabilities even though PostgreSQL currently im
 | Adapter | Implementation detail |
 |---|---|
 | `PostgresClientRepository` | JDBC client inserts/lookups |
-| `PostgresDocumentRepository` | JDBC document inserts/lookups and explicit client list query |
+| `PostgresDocumentRepository` | JDBC document inserts |
 | `PostgresClientSearchAdapter` | exact company-key matching derived from email domains |
-| `PostgresDocumentSearchAdapter` | PostgreSQL FTS, ranking, and scope predicate |
+| `PostgresDocumentSearchAdapter` | PostgreSQL FTS and ranking |
 | `PostgresQueryExpansionAdapter` | group lookup in `search_term_mapping` |
 
 ## 5. Domain model and ownership
@@ -144,14 +145,6 @@ Document
 
 Every `Document` carries a non-null `clientId`. The database foreign key guarantees that the owner
 exists.
-
-Document-search scope is an explicit sealed type:
-
-```text
-DocumentSearchScope
-  AllClients
-  Client(clientId)
-```
 
 There is no Tenant entity, hidden client context, `ThreadLocal`, authentication scope, RLS, or
 database-per-client routing.
@@ -249,13 +242,8 @@ relevance.
 
 Ordering is relevance descending, creation time descending, then UUID.
 
-For `DocumentSearchScope.Client(clientId)`, the same FTS query includes:
-
-```sql
-AND d.client_id = :clientId
-```
-
-`AllClients` omits that predicate and is used only by the required global search facade.
+Document FTS is used only by the required global search facade, so its port has no client-scope
+parameter or PostgreSQL `client_id` predicate.
 
 ## 8. Request flows
 
@@ -279,33 +267,11 @@ sequenceDiagram
     Controller-->>HTTP: 201 Created
 ```
 
-### Client-scoped document search
-
-```mermaid
-sequenceDiagram
-    participant HTTP
-    participant Controller as DocumentController
-    participant Service as DocumentService
-    participant Normalizer as QueryNormalizer
-    participant Expander as QueryExpander
-    participant Search as DocumentSearchPort
-    participant DB as PostgreSQL
-
-    HTTP->>Controller: GET /clients/{clientId}/documents?q=address proof
-    Controller->>Service: search(clientId, q, limit)
-    Service->>DB: verify client exists
-    Service->>Normalizer: normalize(q)
-    Service->>Expander: expand(normalized query)
-    Service->>Search: search(terms, Client(clientId), limit)
-    Search->>DB: FTS AND client_id = :clientId
-    Controller-->>HTTP: client-owned documents only
-```
-
 ### Global search
 
 `SearchService` creates a company-specific `ClientSearchQuery`, separately normalizes the document
-query, calls `ClientSearchPort`, expands document terms, calls `DocumentSearchPort` with
-`AllClients`, and returns the two result groups without inventing a shared score. `SearchController`
+query, calls `ClientSearchPort`, expands document terms, calls `DocumentSearchPort`, and returns
+the two result groups without inventing a shared score. `SearchController`
 serializes client results first and document results second. The supplied `limit` applies
 independently to each result type, so the response can contain up to twice that number of items.
 
@@ -315,8 +281,6 @@ independently to each result type, so the response can contain up to twice that 
 |---|---|
 | `POST /clients` | Creates and returns a client with `201` and `Location` |
 | `POST /clients/{clientId}/documents` | Creates a client-owned text document |
-| `GET /clients/{clientId}/documents` | Lists documents for one client; supports `limit` and `offset` |
-| `GET /clients/{clientId}/documents?q=...` | Searches documents for one client; supports `limit` |
 | `GET /search?q=...` | Searches clients and all-client documents; supports per-type `limit` |
 
 The configured default limit is `20`, and the configured maximum is `100`.
@@ -363,8 +327,8 @@ Pure unit tests cover:
   length;
 - company-query case/whitespace normalization and the deliberate absence of fuzzy punctuation rules;
 - expansion, original-term preservation, and deduplication;
-- global-search orchestration and `AllClients` scope selection;
-- client-scoped search propagation, unknown-client handling, and content-size enforcement.
+- global-search orchestration;
+- unknown-client document creation and content-size enforcement.
 
 `NevisPostgresIntegrationTest` uses a real PostgreSQL Testcontainer and covers:
 
@@ -373,7 +337,7 @@ Pure unit tests cover:
   email handling;
 - mapping-group expansion and negative expansion;
 - PostgreSQL stemming, title weighting, ranking, and no-result behaviour;
-- client-scope isolation versus intentional global scope;
+- business-term expansion with global document search;
 - API creation, validation, malformed JSON, unsupported media type, unknown client, typed global
   results, and empty results;
 - the external snake_case JSON contract and generated OpenAPI models/status codes.
@@ -384,7 +348,7 @@ environments without Docker skip it instead of substituting H2.
 Verification at the time this document was created:
 
 - `mvn verify` builds the executable JAR successfully;
-- all 17 tests pass on a Docker-enabled Ubuntu mini PC: 11 unit tests and 6 PostgreSQL/API
+- all 16 tests pass on a Docker-enabled Ubuntu mini PC: 10 unit tests and 6 PostgreSQL/API
   integration tests;
 - Testcontainers starts the pinned PostgreSQL 17.6 image, and Flyway applies `V1__initial_schema.sql`
   to an empty schema;
@@ -403,11 +367,12 @@ The implementation preserves the plan's boundaries. Equivalent concrete choices 
   earlier name and full-email matching was removed after this product decision was made explicit;
 - `ClientSearchPort` uses the plan's `search(ClientSearchQuery)` shape; the global result limit is
   applied by `SearchService` without leaking it into the company-search capability;
-- `DocumentSearchPort` receives the already expanded `Set<String>` plus explicit scope and limit;
-  PostgreSQL query construction remains in the adapter;
+- `search-api-cleanup-plan.md` supersedes the older plan's client-scoped list/search endpoint:
+  only `GET /search` searches documents, and `DocumentSearchPort` receives expanded terms and a
+  limit without a no-longer-needed scope type;
+- PostgreSQL query construction remains in the adapter;
 - expanded alternatives use separate safe `websearch_to_tsquery` values and maximum matching rank,
   which provides the planned OR semantics without application-level `tsquery` construction;
-- listing supports `limit` and `offset`; FTS and global search currently support `limit` only;
 - Maven was selected because the empty repository had no pre-existing build tool;
 - optional summarization was intentionally left out after the core implementation.
 

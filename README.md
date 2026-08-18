@@ -108,17 +108,6 @@ The response is `201 Created`:
 }
 ```
 
-Search only that client's documents with a related business term:
-
-```bash
-curl "http://localhost:8080/clients/CLIENT_ID/documents?q=address%20proof"
-```
-
-The utility-bill document is returned because the initial Flyway data places `address proof`,
-`proof of address`, `proof of residency`, `utility bill`, and `bank statement` in the same explicit
-business-term group. The SQL also contains `client_id = CLIENT_ID`, so a stronger match owned by a
-different client cannot leak into this result.
-
 Find the client by a company-like query derived from the email domain:
 
 ```bash
@@ -175,12 +164,6 @@ contract does not require that rule.
 Creates a text document for an existing client. `title` and `content` are required. An unknown
 client returns `404`; invalid input returns `400`.
 
-### `GET /clients/{clientId}/documents`
-
-- Without `q`, lists only that client's documents.
-- With `q`, normalizes and expands the query, then searches only that client's documents.
-- Optional `limit` defaults to `20`; list requests also accept `offset`, defaulting to `0`.
-
 ### `GET /search?q={query}`
 
 Searches clients by company derived from their email domain and searches documents across all
@@ -229,10 +212,9 @@ Validation and failures use a consistent response shape:
   `address proof` and `utility bill` are linguistic synonyms.
 - The small `search_term_mapping` table is Flyway-seeded and avoids hard-coding business vocabulary
   in application services.
-- Client-specific document operations carry an explicit `clientId` through the call graph and SQL.
-  There is no ambient client context.
-- The global `/search` facade exists because the task requires it; the primary client-centric path
-  remains selecting a client and searching that client's document collection.
+- Document creation carries an explicit `clientId`; there is no ambient client context.
+- The global `/search` facade is the only document-search API. It searches across all clients as
+  required by the current cleanup plan.
 - A shared database is appropriate for this implementation. Tenant, RLS, and database-per-client
   models are not introduced. Stronger isolation is a future product and operations trade-off.
 - A dedicated engine such as Lucene or OpenSearch becomes justified when search scale, independent

@@ -8,8 +8,6 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -34,34 +32,6 @@ public class PostgresDocumentRepository implements DocumentRepository {
                 .param("createdAt", Timestamp.from(document.createdAt()))
                 .update();
         return document;
-    }
-
-    @Override
-    public Optional<Document> findById(UUID id) {
-        return jdbcClient.sql("""
-                        SELECT id, client_id, title, content, created_at
-                        FROM documents
-                        WHERE id = :id
-                        """)
-                .param("id", id)
-                .query(PostgresDocumentRepository::mapDocument)
-                .optional();
-    }
-
-    @Override
-    public List<Document> findByClientId(UUID clientId, int limit, int offset) {
-        return jdbcClient.sql("""
-                        SELECT id, client_id, title, content, created_at
-                        FROM documents
-                        WHERE client_id = :clientId
-                        ORDER BY created_at DESC, id
-                        LIMIT :limit OFFSET :offset
-                        """)
-                .param("clientId", clientId)
-                .param("limit", limit)
-                .param("offset", offset)
-                .query(PostgresDocumentRepository::mapDocument)
-                .list();
     }
 
     static Document mapDocument(ResultSet resultSet, int rowNumber) throws SQLException {

@@ -8,7 +8,6 @@ import com.nevis.search.domain.ClientSearchQuery;
 import com.nevis.search.domain.ClientSearchResult;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentSearchResult;
-import com.nevis.search.domain.DocumentSearchScope;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -22,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SearchServiceTest {
 
     @Test
-    void orchestratesClientAndAllClientsDocumentSearchWithoutMergingScores() {
+    void orchestratesClientAndDocumentSearchWithoutMergingScores() {
         SearchProperties properties = new SearchProperties(200, 20, 100);
         QueryNormalizer normalizer = new QueryNormalizer(properties);
         ClientSearchQueryNormalizer clientNormalizer = new ClientSearchQueryNormalizer(properties);
@@ -36,10 +35,8 @@ class SearchServiceTest {
             capturedClientQuery.set(query);
             return List.of(new ClientSearchResult(client));
         };
-        AtomicReference<DocumentSearchScope> capturedScope = new AtomicReference<>();
         AtomicReference<Set<String>> capturedTerms = new AtomicReference<>();
-        DocumentSearchPort documentSearch = (terms, scope, limit) -> {
-            capturedScope.set(scope);
+        DocumentSearchPort documentSearch = (terms, limit) -> {
             capturedTerms.set(terms);
             return List.of(new DocumentSearchResult(document, 0.4));
         };
@@ -52,7 +49,6 @@ class SearchServiceTest {
         assertThat(result.clients()).extracting(ClientSearchResult::client).containsExactly(client);
         assertThat(result.documents()).extracting(DocumentSearchResult::document).containsExactly(document);
         assertThat(capturedClientQuery.get().value()).isEqualTo("addressproof");
-        assertThat(capturedScope.get()).isInstanceOf(DocumentSearchScope.AllClients.class);
         assertThat(capturedTerms.get()).containsExactlyInAnyOrder("address proof", "utility bill");
     }
 }
