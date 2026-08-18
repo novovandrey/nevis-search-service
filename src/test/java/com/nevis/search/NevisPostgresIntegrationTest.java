@@ -232,12 +232,15 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$").isEmpty());
 
         mockMvc.perform(post("/clients")
+                        .header("Accept-Language", "ru-RU")
                         .contentType("application/json")
                         .content("""
                                 {"firstName":"Bad","lastName":"Email","email":"not-an-email"}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.violations[0].field").value("email"));
+                .andExpect(jsonPath("$.violations[0].field").value("email"))
+                .andExpect(jsonPath("$.violations[0].message")
+                        .value("must be a well-formed email address"));
 
         mockMvc.perform(post("/clients/{clientId}/documents", UUID.randomUUID())
                         .contentType("application/json")

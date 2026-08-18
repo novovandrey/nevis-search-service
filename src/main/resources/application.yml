@@ -9,6 +9,9 @@ spring:
     enabled: true
   jackson:
     default-property-inclusion: non_null
+  web:
+    locale: en
+    locale-resolver: fixed
 
 server:
   port: ${SERVER_PORT:8080}
@@ -24,4 +27,3 @@ nevis:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
-
