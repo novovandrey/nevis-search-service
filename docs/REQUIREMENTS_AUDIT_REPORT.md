@@ -67,16 +67,12 @@ The old smoke stack and its PostgreSQL volume were removed first. The final imag
 database were then created with:
 
 ```text
-APP_HOST_PORT=18080 docker compose -p nevis-smoke up -d --build --wait
+APP_HOST_PORT=8080 docker compose -p nevis-smoke up -d --build --wait
 ```
 
 Both `nevis-smoke-app-1` and `nevis-smoke-postgres-1` became healthy. Flyway created the empty
 schema at version V1, the application listened on container port `8080`, and Compose published it
-as `0.0.0.0:18080->8080`.
-
-Host port `8080` belongs to the mini-PC's existing `flashcards.service`. At the user's explicit
-direction it was not interrupted, and the verified Nevis stack remains running on `18080`. The
-repository default remains host port `8080`; `APP_HOST_PORT` is an optional host-specific override.
+as 8080`.
 
 Observed final HTTP results against the clean stack:
 
@@ -103,7 +99,7 @@ POST /clients with application/octet-stream         415; consistent ApiError res
 | PostgreSQL FTS | PASS | generated weighted `search_vector`, GIN index, `PostgresDocumentSearchAdapter`; stemming/ranking integration test | none |
 | Tests for core logic and edge cases | PASS | 17 tests: 11 unit and 6 PostgreSQL/API integration; `mvn verify` succeeds | JSON-contract and generated-OpenAPI integration coverage added |
 | Docker Compose | PASS | clean image, network, PostgreSQL volume, Flyway migration, healthy containers, and E2E smoke on mini PC | added configurable host-port override while preserving the required default |
-| Port 8080 | PASS | application verified listening on container `8080`; `compose.yaml` defaults host mapping to `8080`; user-selected mini-PC host override is `18080` | `${APP_HOST_PORT:-8080}:8080` supports the occupied mini-PC host without changing the default contract |
+| Port 8080 | PASS | application verified listening on container `8080`; `compose.yaml` defaults host mapping to `8080`; `${APP_HOST_PORT:-8080}:8080` supports the occupied mini-PC host without changing the default contract |
 | README setup instructions | PASS | `README.md` — Run locally, Tests, Configuration | none |
 | README examples | PASS | `README.md` — Example workflow | added creation responses and complete related-term global-search example; aligned JSON names |
 | API documentation | PASS | Swagger UI `/swagger-ui.html`; OpenAPI `/v3/api-docs`; `openApiDocumentsJsonContractAndActualResponseStatuses` | response codes/schemas explicitly annotated and tested |

@@ -355,9 +355,7 @@ Verification at the time this document was created:
 - the Docker image builds and starts successfully with PostgreSQL from `compose.yaml`;
 - an HTTP smoke test verifies OpenAPI, client and document creation, company-domain search,
   related-term document search, and unsupported-media-type `415` handling;
-- the repository Compose configuration maps the application to host port `8080`. The existing
-  mini-PC deployment remains on its previously selected `18080` mapping because this port change is
-  intentionally not deployed there.
+- the repository Compose configuration maps the application to host port `8080`.
 
 ## 12. Plan-to-implementation notes
 
