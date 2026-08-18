@@ -92,6 +92,43 @@ class NevisPostgresIntegrationTest {
 
     @Test
     void migrationsCreateGeneratedSearchVectorAndForeignKey() {
+        List<String> mappingColumns = jdbcClient.sql("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = 'search_term_mapping'
+                        ORDER BY ordinal_position
+                        """)
+                .query(String.class)
+                .list();
+        assertThat(mappingColumns).containsExactly("group_key", "term");
+
+        String mappingPrimaryKey = jdbcClient.sql("""
+                        SELECT pg_get_constraintdef(oid)
+                        FROM pg_constraint
+                        WHERE conrelid = 'public.search_term_mapping'::regclass
+                          AND contype = 'p'
+                        """)
+                .query(String.class)
+                .single();
+        assertThat(mappingPrimaryKey).isEqualTo("PRIMARY KEY (group_key, term)");
+        assertThat(jdbcClient.sql("""
+                        SELECT term
+                        FROM search_term_mapping
+                        WHERE group_key = 'proof_of_address'
+                        ORDER BY term
+                        """)
+                .query(String.class)
+                .list())
+                .containsExactly(
+                        "address proof", "bank statement", "proof of address",
+                        "proof of residency", "utility bill"
+                );
+        assertThatThrownBy(() -> jdbcClient.sql("""
+                        INSERT INTO search_term_mapping (group_key, term)
+                        VALUES ('proof_of_address', 'address proof')
+                        """).update())
+                .isInstanceOf(DataAccessException.class);
+
         Client client = clientService.create("Ada", "Lovelace", "ada@example.com", "UK");
         Document document = documentService.create(client.id(), "Utility Bill", "Residential address");
 

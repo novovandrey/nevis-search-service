@@ -22,12 +22,11 @@ public class PostgresQueryExpansionAdapter implements QueryExpansionPort {
                         SELECT related.term
                         FROM search_term_mapping matched
                         JOIN search_term_mapping related ON related.group_key = matched.group_key
-                        WHERE matched.normalized_term = :query
-                        ORDER BY related.normalized_term
+                        WHERE matched.term = :query
+                        ORDER BY related.term
                         """)
                 .param("query", normalizedQuery)
                 .query(String.class)
                 .list());
     }
 }
-

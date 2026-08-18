@@ -2,9 +2,9 @@
 
 > Status: implementation architecture as of 2026-08-18.
 >
-> The original agreed plan is preserved unchanged in
-> [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). The narrower client-search requirements in
-> [`CLIENT_SEARCH_PLAN.md`](CLIENT_SEARCH_PLAN.md) supersede the original plan for that capability.
+> The implementation plan and this as-built document describe the current final design. The narrower
+> client-search requirements in [`CLIENT_SEARCH_PLAN.md`](CLIENT_SEARCH_PLAN.md) supersede the older
+> client-search design for that capability.
 > [`search-api-cleanup-plan.md`](search-api-cleanup-plan.md) supersedes it for the removed
 > client-specific document `GET` endpoint.
 > This document describes the code that actually exists in the repository.
@@ -175,8 +175,8 @@ The generated expression uses the PostgreSQL `english` text-search configuration
 
 ### `search_term_mapping`
 
-The table has `group_key`, `term`, and `normalized_term`, with a primary key on
-`(group_key, normalized_term)`. Flyway seeds one `proof_of_address` group:
+The table has `group_key` and `term`, with a primary key on `(group_key, term)`. Flyway seeds one
+`proof_of_address` group:
 
 ```text
 address proof

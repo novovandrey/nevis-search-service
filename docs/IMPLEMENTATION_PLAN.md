@@ -489,23 +489,22 @@ search_term_mapping
 -------------------
 group_key
 term
-normalized_term
 ```
 
 Example rows:
 
 ```text
-proof_of_address | address proof       | address proof
-proof_of_address | proof of address    | proof of address
-proof_of_address | proof of residency  | proof of residency
-proof_of_address | utility bill        | utility bill
-proof_of_address | bank statement      | bank statement
+proof_of_address | address proof
+proof_of_address | proof of address
+proof_of_address | proof of residency
+proof_of_address | utility bill
+proof_of_address | bank statement
 ```
 
 Recommended key:
 
 ```text
-PRIMARY KEY (group_key, normalized_term)
+PRIMARY KEY (group_key, term)
 ```
 
 This is intentionally a small business vocabulary table, not a generic thesaurus system.

@@ -24,13 +24,12 @@ CREATE INDEX documents_client_id_idx ON documents (client_id);
 CREATE TABLE search_term_mapping (
     group_key VARCHAR(100) NOT NULL,
     term VARCHAR(200) NOT NULL,
-    normalized_term VARCHAR(200) NOT NULL,
-    PRIMARY KEY (group_key, normalized_term)
+    PRIMARY KEY (group_key, term)
 );
 
-INSERT INTO search_term_mapping (group_key, term, normalized_term) VALUES
-    ('proof_of_address', 'address proof', 'address proof'),
-    ('proof_of_address', 'proof of address', 'proof of address'),
-    ('proof_of_address', 'proof of residency', 'proof of residency'),
-    ('proof_of_address', 'utility bill', 'utility bill'),
-    ('proof_of_address', 'bank statement', 'bank statement');
+INSERT INTO search_term_mapping (group_key, term) VALUES
+    ('proof_of_address', 'address proof'),
+    ('proof_of_address', 'proof of address'),
+    ('proof_of_address', 'proof of residency'),
+    ('proof_of_address', 'utility bill'),
+    ('proof_of_address', 'bank statement');

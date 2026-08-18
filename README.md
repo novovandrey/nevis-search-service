@@ -3,8 +3,8 @@
 Java 25 / Spring Boot service for creating clients, storing their text documents, finding clients,
 and searching documents with PostgreSQL Full Text Search.
 
-The as-built architecture is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The original agreed
-plan is preserved unchanged in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md), and
+The as-built architecture is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and the implementation
+decisions are recorded in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 the strict company-domain client-search rules are in
 [`docs/CLIENT_SEARCH_PLAN.md`](docs/CLIENT_SEARCH_PLAN.md). The requirements audit and its
 execution evidence are in [`docs/REQUIREMENTS_AUDIT.md`](docs/REQUIREMENTS_AUDIT.md) and
