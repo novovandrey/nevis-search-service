@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record CreateDocumentRequest(
-        @NotBlank @Size(max = 255) @Schema(minLength = 1, maxLength = 255) String title,
+        @NotBlank @Size(min = 1, max = 255) @Schema(minLength = 1, maxLength = 255) String title,
         @NotBlank String content
 ) {
 }
