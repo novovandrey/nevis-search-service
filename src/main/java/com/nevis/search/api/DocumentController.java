@@ -22,7 +22,7 @@ import java.net.URI;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/clients/{clientId}/documents")
+@RequestMapping("/clients/{id}/documents")
 public class DocumentController {
 
     private final DocumentService documentService;
@@ -51,7 +51,7 @@ public class DocumentController {
                             schema = @Schema(implementation = ApiError.class)))
     })
     public ResponseEntity<DocumentResponse> create(
-            @PathVariable UUID clientId,
+            @PathVariable("id") UUID clientId,
             @Valid @RequestBody CreateDocumentRequest request
     ) {
         Document document = documentService.create(clientId, request.title(), request.content());

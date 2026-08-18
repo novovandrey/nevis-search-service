@@ -152,7 +152,7 @@ Creates a client. `first_name`, `last_name`, and a syntactically valid `email` a
 `lastName` are also accepted. Email is not assumed to be globally unique because the supplied
 contract does not require that rule.
 
-### `POST /clients/{clientId}/documents`
+### `POST /clients/{id}/documents`
 
 Creates a text document for an existing client. `title` and `content` are required. An unknown
 client returns `404`; invalid input returns `400`.

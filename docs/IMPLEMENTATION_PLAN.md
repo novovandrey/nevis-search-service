@@ -802,7 +802,7 @@ Validation:
 - email must be syntactically valid;
 - field lengths must be bounded.
 
-### 14.2 `POST /clients/{clientId}/documents`
+### 14.2 `POST /clients/{id}/documents`
 
 Creates a document belonging to the client.
 
@@ -936,7 +936,7 @@ PostgreSQL
 ### 15.2 Create document
 
 ```text
-HTTP POST /clients/{clientId}/documents
+HTTP POST /clients/{id}/documents
         |
         v
 DocumentController
@@ -1215,7 +1215,7 @@ Document at least:
 
 ```text
 POST /clients
-POST /clients/{clientId}/documents
+POST /clients/{id}/documents
 GET  /clients/{clientId}/documents
 GET  /search
 ```
@@ -1427,7 +1427,7 @@ Run migrations through Testcontainers before continuing.
 
 ### Phase 3 — Document CRUD and client collection
 
-1. Implement `POST /clients/{clientId}/documents`.
+1. Implement `POST /clients/{id}/documents`.
 2. Reject unknown client with `404`.
 3. Implement `GET /clients/{clientId}/documents` without `q`.
 4. Add strict `clientId` scoping tests.

@@ -28,7 +28,7 @@ public class SearchController {
     }
 
     @GetMapping("/search")
-    @Operation(summary = "Search clients by company domain and documents globally")
+    @Operation(summary = "Search clients by company domain and search documents globally")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Matching clients and documents returned",
                     content = @Content(mediaType = "application/json",

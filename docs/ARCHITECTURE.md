@@ -258,7 +258,7 @@ sequenceDiagram
     participant Documents as DocumentRepository
     participant DB as PostgreSQL
 
-    HTTP->>Controller: POST /clients/{clientId}/documents
+    HTTP->>Controller: POST /clients/{id}/documents
     Controller->>Service: create(clientId, title, content)
     Service->>Clients: existsById(clientId)
     Clients->>DB: SELECT EXISTS with clientId
@@ -280,7 +280,7 @@ parameter and returns all matches in the deterministic order described above.
 | Method and path | Behaviour |
 |---|---|
 | `POST /clients` | Creates and returns a client with `201` and `Location` |
-| `POST /clients/{clientId}/documents` | Creates a client-owned text document |
+| `POST /clients/{id}/documents` | Creates a client-owned text document |
 | `GET /search?q=...` | Searches clients and all-client documents |
 
 OpenAPI annotations on the controllers document the actual `201`, `200`, `400`, `404`, and `500`

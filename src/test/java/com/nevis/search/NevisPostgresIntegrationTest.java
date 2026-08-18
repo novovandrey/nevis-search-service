@@ -196,7 +196,7 @@ class NevisPostgresIntegrationTest {
                 .getContentAsString();
         String clientId = com.jayway.jsonpath.JsonPath.read(clientBody, "$.id");
 
-        mockMvc.perform(post("/clients/{clientId}/documents", clientId)
+        mockMvc.perform(post("/clients/{id}/documents", clientId)
                         .contentType("application/json")
                         .content("""
                                 {"title":"Utility Bill","content":"Electricity bill for this address"}
@@ -238,7 +238,7 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.violations[0].message")
                         .value("must be a well-formed email address"));
 
-        mockMvc.perform(post("/clients/{clientId}/documents", UUID.randomUUID())
+        mockMvc.perform(post("/clients/{id}/documents", UUID.randomUUID())
                         .contentType("application/json")
                         .content("""
                                 {"title":"Missing","content":"Client does not exist"}
@@ -277,10 +277,11 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.paths['/clients'].post.responses['400']").exists())
                 .andExpect(jsonPath("$.paths['/clients'].post.responses['415']").exists())
                 .andExpect(jsonPath("$.paths['/clients'].post.responses['500']").exists())
-                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['201']").exists())
-                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['404']").exists())
-                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].post.responses['415']").exists())
-                .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].get").doesNotExist())
+                .andExpect(jsonPath("$.paths['/clients/{id}/documents'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{id}/documents'].post.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{id}/documents'].post.responses['415']").exists())
+                .andExpect(jsonPath("$.paths['/clients/{id}/documents'].post.parameters[0].name").value("id"))
+                .andExpect(jsonPath("$.paths['/clients/{id}/documents'].get").doesNotExist())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['400']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['500']").exists())
