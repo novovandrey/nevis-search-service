@@ -311,8 +311,8 @@ local workflow.
 
 - pinned `postgres:17.6-alpine` with a health check and persistent volume;
 - an application image built by the repository `Dockerfile`;
-- application port `8080`, mapped to host port `8080` by default and configurable with
-  `APP_HOST_PORT`, plus PostgreSQL port `5432` for local database access;
+- application port `8080`, mapped to host port `8080`, plus PostgreSQL port `5432` for local database
+  access;
 - application startup after PostgreSQL becomes healthy;
 - automatic Flyway execution during Spring Boot startup.
 
@@ -355,9 +355,9 @@ Verification at the time this document was created:
 - the Docker image builds and starts successfully with PostgreSQL from `compose.yaml`;
 - an HTTP smoke test verifies OpenAPI, client and document creation, company-domain search,
   related-term document search, and unsupported-media-type `415` handling;
-- at the user's direction, the verified mini-PC stack remains running on host port `18080` because
-  its existing `flashcards.service` occupies `8080`. The application listens on container port
-  `8080`; `APP_HOST_PORT` defaults to `8080` in the repository and was set to `18080` for this host.
+- the repository Compose configuration maps the application to host port `8080`. The existing
+  mini-PC deployment remains on its previously selected `18080` mapping because this port change is
+  intentionally not deployed there.
 
 ## 12. Plan-to-implementation notes
 

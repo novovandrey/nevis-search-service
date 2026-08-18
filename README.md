@@ -27,13 +27,6 @@ The API is available at `http://localhost:8080`. Flyway applies the schema and s
 automatically. Swagger UI is at `http://localhost:8080/swagger-ui.html`, and the OpenAPI document is
 at `http://localhost:8080/v3/api-docs`.
 
-If host port `8080` is already occupied, override only the host-side port while the application
-continues to listen on `8080` inside the container:
-
-```bash
-APP_HOST_PORT=18080 docker compose up --build
-```
-
 Stop the service with `docker compose down`. Add `--volumes` only when the local PostgreSQL data may
 be deleted.
 
@@ -194,7 +187,6 @@ Validation and failures use a consistent response shape:
 | `DB_URL` | `jdbc:postgresql://localhost:5432/nevis` | PostgreSQL JDBC URL |
 | `DB_USERNAME` | `nevis` | Database username |
 | `DB_PASSWORD` | `nevis` | Database password |
-| `APP_HOST_PORT` | `8080` | Docker Compose host port mapped to application port `8080` |
 | `SERVER_PORT` | `8080` | HTTP port |
 | `MAX_QUERY_LENGTH` | `200` | Maximum normalized query length |
 | `SEARCH_DEFAULT_LIMIT` | `20` | Documented default result limit |
