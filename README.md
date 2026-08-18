@@ -138,6 +138,7 @@ The document containing the related term `utility bill` is returned:
     "id": "22222222-2222-2222-2222-222222222222",
     "client_id": "11111111-1111-1111-1111-111111111111",
     "title": "Utility Bill",
+    "content": "Full document content...",
     "created_at": "2026-08-17T12:00:00Z"
   }
 ]
@@ -162,7 +163,9 @@ client returns `404`; invalid input returns `400`.
 Searches clients by company derived from their email domain and searches documents across all
 clients, as required by the assignment. Client lookup does not search first name, last name, or
 full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`). Client and document
-relevance values are deliberately not exposed as one fake cross-type score.
+relevance values are deliberately not exposed as one fake cross-type score. `content` is populated
+only for `DOCUMENT` results and contains the complete stored document text without truncation,
+snippets, or highlighting.
 
 Validation and failures use a consistent response shape:
 

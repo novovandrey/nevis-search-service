@@ -128,6 +128,17 @@ def contains_entity_with_id(results: Any, entity_id: str) -> bool:
     return any(str(item.get("id")) == entity_id for item in search_result_entities(results))
 
 
+def entity_with_id(results: Any, entity_id: str) -> dict[str, Any] | None:
+    return next(
+        (
+            item
+            for item in search_result_entities(results)
+            if str(item.get("id")) == entity_id
+        ),
+        None,
+    )
+
+
 def contains_email(results: Any, email: str) -> bool:
     email_lower = email.lower()
     return any(
@@ -295,6 +306,19 @@ def run(base_url: str) -> None:
         (
             'Search for "address proof" did not return a document containing '
             f'"utility bill". Document id={document_id}. Body: {response.raw}'
+        ),
+    )
+    matching_document = entity_with_id(response.body, document_id)
+    check(
+        matching_document is not None
+        and matching_document.get("type") == "DOCUMENT",
+        f"Synonym search result {document_id} is not typed as DOCUMENT. Body: {response.raw}",
+    )
+    check(
+        matching_document.get("content") == document_content,
+        (
+            "Synonym search did not return the original stored document content. "
+            f"Body: {response.raw}"
         ),
     )
     print('PASS "address proof" finds document containing "utility bill"')

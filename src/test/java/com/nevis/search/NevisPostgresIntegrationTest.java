@@ -31,7 +31,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -199,16 +198,19 @@ class NevisPostgresIntegrationTest {
         mockMvc.perform(post("/clients/{id}/documents", clientId)
                         .contentType("application/json")
                         .content("""
-                                {"title":"Utility Bill","content":"Electricity bill for this address"}
+                                {"title":"Utility Bill","content":"Original document content containing utility bill"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.client_id").value(clientId))
-                .andExpect(jsonPath("$.content").value("Electricity bill for this address"))
+                .andExpect(jsonPath("$.content")
+                        .value("Original document content containing utility bill"))
                 .andExpect(jsonPath("$.created_at").exists());
 
         mockMvc.perform(get("/search").param("q", "Nevis Wealth"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].type", hasItem("CLIENT")));
+                .andExpect(jsonPath("$[0].type").value("CLIENT"))
+                .andExpect(jsonPath("$[0].email").value("anton.batiaev@neviswealth.com"))
+                .andExpect(jsonPath("$[0].content").doesNotExist());
 
         mockMvc.perform(get("/search").param("q", "Batiaev"))
                 .andExpect(status().isOk())
@@ -220,8 +222,10 @@ class NevisPostgresIntegrationTest {
 
         mockMvc.perform(get("/search").param("q", "address proof"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].type", hasItem("DOCUMENT")))
-                .andExpect(jsonPath("$[*].title", hasItem("Utility Bill")));
+                .andExpect(jsonPath("$[0].type").value("DOCUMENT"))
+                .andExpect(jsonPath("$[0].title").value("Utility Bill"))
+                .andExpect(jsonPath("$[0].content")
+                        .value("Original document content containing utility bill"));
 
         mockMvc.perform(get("/search").param("q", "definitely missing"))
                 .andExpect(status().isOk())
@@ -273,6 +277,9 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.components.schemas.CreateClientRequest.properties.last_name").exists())
                 .andExpect(jsonPath("$.components.schemas.DocumentResponse.properties.client_id").exists())
                 .andExpect(jsonPath("$.components.schemas.DocumentResponse.properties.created_at").exists())
+                .andExpect(jsonPath("$.components.schemas.DocumentSearchResponse.properties.content").exists())
+                .andExpect(jsonPath("$.components.schemas.DocumentSearchResponse.properties.content.description")
+                        .value("Stored document content; populated for DOCUMENT search results only"))
                 .andExpect(jsonPath("$.paths['/clients'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/clients'].post.responses['400']").exists())
                 .andExpect(jsonPath("$.paths['/clients'].post.responses['415']").exists())
