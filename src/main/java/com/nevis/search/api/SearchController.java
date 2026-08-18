@@ -5,7 +5,6 @@ import com.nevis.search.api.dto.ClientSearchResponse;
 import com.nevis.search.api.dto.DocumentSearchResponse;
 import com.nevis.search.api.dto.SearchResultResponse;
 import com.nevis.search.application.SearchService;
-import com.nevis.search.config.SearchProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -23,11 +22,9 @@ import java.util.List;
 public class SearchController {
 
     private final SearchService searchService;
-    private final SearchProperties searchProperties;
 
-    public SearchController(SearchService searchService, SearchProperties searchProperties) {
+    public SearchController(SearchService searchService) {
         this.searchService = searchService;
-        this.searchProperties = searchProperties;
     }
 
     @GetMapping("/search")
@@ -44,11 +41,9 @@ public class SearchController {
                             schema = @Schema(implementation = ApiError.class)))
     })
     public List<SearchResultResponse> search(
-            @RequestParam String q,
-            @RequestParam(required = false) Integer limit
+            @RequestParam String q
     ) {
-        int effectiveLimit = limit == null ? searchProperties.defaultLimit() : limit;
-        SearchService.GlobalSearchResults results = searchService.search(q, effectiveLimit);
+        SearchService.GlobalSearchResults results = searchService.search(q);
         List<SearchResultResponse> response = new ArrayList<>(
                 results.clients().size() + results.documents().size()
         );

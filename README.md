@@ -161,9 +161,8 @@ client returns `404`; invalid input returns `400`.
 
 Searches clients by company derived from their email domain and searches documents across all
 clients, as required by the assignment. Client lookup does not search first name, last name, or
-full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`). The optional per-type
-`limit` defaults to `20`. Client and document relevance values are deliberately not exposed as one
-fake cross-type score.
+full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`). Client and document
+relevance values are deliberately not exposed as one fake cross-type score.
 
 Validation and failures use a consistent response shape:
 
@@ -189,8 +188,6 @@ Validation and failures use a consistent response shape:
 | `DB_PASSWORD` | `nevis` | Database password |
 | `SERVER_PORT` | `8080` | HTTP port |
 | `MAX_QUERY_LENGTH` | `200` | Maximum normalized query length |
-| `SEARCH_DEFAULT_LIMIT` | `20` | Documented default result limit |
-| `SEARCH_MAX_LIMIT` | `100` | Maximum result limit |
 | `MAX_DOCUMENT_CONTENT_LENGTH` | `1000000` | Maximum document content length |
 
 ## Architecture decisions

@@ -802,7 +802,7 @@ Validation:
 - email must be syntactically valid;
 - field lengths must be bounded.
 
-### 14.2 `POST /clients/{id}/documents`
+### 14.2 `POST /clients/{clientId}/documents`
 
 Creates a document belonging to the client.
 
@@ -1584,7 +1584,7 @@ The implementation is complete when all of the following are true.
 | Global `/search` | Implemented to satisfy task contract; kept as facade |
 | `/search` response | One typed/polymorphic result array |
 | Cross-type global score | Not introduced |
-| Client document endpoint | `GET /clients/{id}/documents?q=...` |
+| Client document endpoint | `GET /clients/{clientId}/documents?q=...` |
 | Database-per-client | Future/interview trade-off only |
 | RLS | Not implemented |
 | Synonym/semantic engine | No generic engine; deterministic mappings only |
@@ -1611,4 +1611,3 @@ The implementation is complete when all of the following are true.
 8. **Test the database feature actually used.** PostgreSQL FTS must be tested against PostgreSQL.
 9. **Do not silently broaden the architecture.** If implementation requires changing these decisions, document the discrepancy before changing the design.
 10. **Preserve interview-worthy trade-offs.** Shared DB vs database-per-client, PostgreSQL FTS vs dedicated search, and global vs client-scoped search are deliberate decisions that should be explainable rather than hidden.
-

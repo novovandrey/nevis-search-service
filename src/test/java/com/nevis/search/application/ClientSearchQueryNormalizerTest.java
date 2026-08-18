@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ClientSearchQueryNormalizerTest {
 
     private final ClientSearchQueryNormalizer normalizer =
-            new ClientSearchQueryNormalizer(new SearchProperties(50, 10, 50));
+            new ClientSearchQueryNormalizer(new SearchProperties(50));
 
     @Test
     void normalizesEquivalentCompanyQueriesToTheSameKey() {

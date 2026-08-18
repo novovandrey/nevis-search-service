@@ -19,8 +19,6 @@ server:
 nevis:
   search:
     max-query-length: ${MAX_QUERY_LENGTH:200}
-    default-limit: ${SEARCH_DEFAULT_LIMIT:20}
-    max-limit: ${SEARCH_MAX_LIMIT:100}
   documents:
     max-content-length: ${MAX_DOCUMENT_CONTENT_LENGTH:1000000}
 

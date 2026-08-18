@@ -22,7 +22,7 @@ class SearchServiceTest {
 
     @Test
     void orchestratesClientAndDocumentSearchWithoutMergingScores() {
-        SearchProperties properties = new SearchProperties(200, 20, 100);
+        SearchProperties properties = new SearchProperties(200);
         QueryNormalizer normalizer = new QueryNormalizer(properties);
         ClientSearchQueryNormalizer clientNormalizer = new ClientSearchQueryNormalizer(properties);
         QueryExpander expander = new QueryExpander(query -> Set.of("utility bill"));
@@ -36,15 +36,15 @@ class SearchServiceTest {
             return List.of(new ClientSearchResult(client));
         };
         AtomicReference<Set<String>> capturedTerms = new AtomicReference<>();
-        DocumentSearchPort documentSearch = (terms, limit) -> {
+        DocumentSearchPort documentSearch = terms -> {
             capturedTerms.set(terms);
             return List.of(new DocumentSearchResult(document, 0.4));
         };
         SearchService service = new SearchService(
-                normalizer, clientNormalizer, expander, clientSearch, documentSearch, properties
+                normalizer, clientNormalizer, expander, clientSearch, documentSearch
         );
 
-        SearchService.GlobalSearchResults result = service.search("Address Proof", 20);
+        SearchService.GlobalSearchResults result = service.search("Address Proof");
 
         assertThat(result.clients()).extracting(ClientSearchResult::client).containsExactly(client);
         assertThat(result.documents()).extracting(DocumentSearchResult::document).containsExactly(document);

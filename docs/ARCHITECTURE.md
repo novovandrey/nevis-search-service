@@ -272,8 +272,8 @@ sequenceDiagram
 `SearchService` creates a company-specific `ClientSearchQuery`, separately normalizes the document
 query, calls `ClientSearchPort`, expands document terms, calls `DocumentSearchPort`, and returns
 the two result groups without inventing a shared score. `SearchController`
-serializes client results first and document results second. The supplied `limit` applies
-independently to each result type, so the response can contain up to twice that number of items.
+serializes client results first and document results second. The HTTP contract has no result-limit
+parameter and returns all matches in the deterministic order described above.
 
 ## 9. HTTP API as implemented
 
@@ -281,15 +281,13 @@ independently to each result type, so the response can contain up to twice that 
 |---|---|
 | `POST /clients` | Creates and returns a client with `201` and `Location` |
 | `POST /clients/{clientId}/documents` | Creates a client-owned text document |
-| `GET /search?q=...` | Searches clients and all-client documents; supports per-type `limit` |
+| `GET /search?q=...` | Searches clients and all-client documents |
 
-The configured default limit is `20`, and the configured maximum is `100`.
 OpenAPI annotations on the controllers document the actual `201`, `200`, `400`, `404`, and `500`
 responses and their response schemas.
 
 Request validation includes bounded names, email syntax, bounded title, non-blank content,
-configurable content size, non-blank searchable queries, maximum query length, valid UUIDs, and
-valid pagination values.
+configurable content size, non-blank searchable queries, maximum query length, and valid UUIDs.
 
 Expected errors use `ApiError`:
 
@@ -303,8 +301,8 @@ generic `500`; the response does not expose SQL or stack traces.
 
 ## 10. Configuration and runtime
 
-`application.yml` maps environment variables for the datasource, server port, query limits, result
-limits, and document content limit. Defaults target the Compose PostgreSQL service for the standard
+`application.yml` maps environment variables for the datasource, server port, query length, and
+document content limit. Defaults target the Compose PostgreSQL service for the standard
 local workflow.
 
 `compose.yaml` defines:
@@ -363,11 +361,10 @@ The implementation preserves the plan's boundaries. Equivalent concrete choices 
 
 - `CLIENT_SEARCH_PLAN.md` deliberately narrows the older plan: client lookup is company-domain only;
   earlier name and full-email matching was removed after this product decision was made explicit;
-- `ClientSearchPort` uses the plan's `search(ClientSearchQuery)` shape; the global result limit is
-  applied by `SearchService` without leaking it into the company-search capability;
+- `ClientSearchPort` uses the plan's `search(ClientSearchQuery)` shape;
 - `search-api-cleanup-plan.md` supersedes the older plan's client-scoped list/search endpoint:
   only `GET /search` searches documents, and `DocumentSearchPort` receives expanded terms and a
-  limit without a no-longer-needed scope type;
+  without a no-longer-needed scope type;
 - PostgreSQL query construction remains in the adapter;
 - expanded alternatives use separate safe `websearch_to_tsquery` values and maximum matching rank,
   which provides the planned OR semantics without application-level `tsquery` construction;

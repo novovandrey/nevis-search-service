@@ -155,7 +155,7 @@ class NevisPostgresIntegrationTest {
         );
         assertThat(queryExpander.expand(queryNormalizer.normalize("passport"))).containsExactly("passport");
 
-        assertThat(searchService.search("address proof", 20).documents())
+        assertThat(searchService.search("address proof").documents())
                 .extracting(result -> result.document().id())
                 .contains(utilityBill.id(), addressProof.id());
     }
@@ -166,16 +166,12 @@ class NevisPostgresIntegrationTest {
         Document titleMatch = documentService.create(client.id(), "Passport", "Official identity record");
         Document contentMatch = documentService.create(client.id(), "Identity Record", "Contains a passport copy");
 
-        List<DocumentSearchResult> results = documentSearchPort.search(
-                Set.of("passports"), 20
-        );
+        List<DocumentSearchResult> results = documentSearchPort.search(Set.of("passports"));
 
         assertThat(results).extracting(result -> result.document().id())
                 .containsExactly(titleMatch.id(), contentMatch.id());
         assertThat(results.getFirst().relevance()).isGreaterThan(results.getLast().relevance());
-        assertThat(documentSearchPort.search(
-                Set.of("unfindable"), 20
-        )).isEmpty();
+        assertThat(documentSearchPort.search(Set.of("unfindable"))).isEmpty();
     }
 
     @Test
@@ -287,6 +283,8 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.paths['/clients/{clientId}/documents'].get").doesNotExist())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/search'].get.responses['400']").exists())
-                .andExpect(jsonPath("$.paths['/search'].get.responses['500']").exists());
+                .andExpect(jsonPath("$.paths['/search'].get.responses['500']").exists())
+                .andExpect(jsonPath("$.paths['/search'].get.parameters.length()").value(1))
+                .andExpect(jsonPath("$.paths['/search'].get.parameters[0].name").value("q"));
     }
 }

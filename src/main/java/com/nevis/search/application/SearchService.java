@@ -1,9 +1,7 @@
 package com.nevis.search.application;
 
-import com.nevis.search.application.exception.InvalidRequestException;
 import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.DocumentSearchPort;
-import com.nevis.search.config.SearchProperties;
 import com.nevis.search.domain.ClientSearchResult;
 import com.nevis.search.domain.DocumentSearchResult;
 import com.nevis.search.domain.SearchQuery;
@@ -25,36 +23,28 @@ public class SearchService {
     private final QueryExpander queryExpander;
     private final ClientSearchPort clientSearchPort;
     private final DocumentSearchPort documentSearchPort;
-    private final SearchProperties searchProperties;
 
     public SearchService(
             QueryNormalizer queryNormalizer,
             ClientSearchQueryNormalizer clientSearchQueryNormalizer,
             QueryExpander queryExpander,
             ClientSearchPort clientSearchPort,
-            DocumentSearchPort documentSearchPort,
-            SearchProperties searchProperties
+            DocumentSearchPort documentSearchPort
     ) {
         this.queryNormalizer = queryNormalizer;
         this.clientSearchQueryNormalizer = clientSearchQueryNormalizer;
         this.queryExpander = queryExpander;
         this.clientSearchPort = clientSearchPort;
         this.documentSearchPort = documentSearchPort;
-        this.searchProperties = searchProperties;
     }
 
-    public GlobalSearchResults search(String rawQuery, int limit) {
-        if (limit < 1 || limit > searchProperties.maxLimit()) {
-            throw new InvalidRequestException("limit must be between 1 and " + searchProperties.maxLimit());
-        }
-
+    public GlobalSearchResults search(String rawQuery) {
         Instant startedAt = Instant.now();
         SearchQuery query = queryNormalizer.normalize(rawQuery);
-        List<ClientSearchResult> clients = clientSearchPort.search(clientSearchQueryNormalizer.normalize(rawQuery))
-                .stream()
-                .limit(limit)
-                .toList();
-        List<DocumentSearchResult> documents = documentSearchPort.search(queryExpander.expand(query), limit);
+        List<ClientSearchResult> clients = clientSearchPort.search(
+                clientSearchQueryNormalizer.normalize(rawQuery)
+        );
+        List<DocumentSearchResult> documents = documentSearchPort.search(queryExpander.expand(query));
         log.debug("Global search completed in {} ms", Duration.between(startedAt, Instant.now()).toMillis());
         return new GlobalSearchResults(clients, documents);
     }
