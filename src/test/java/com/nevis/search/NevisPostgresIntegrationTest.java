@@ -196,6 +196,7 @@ class NevisPostgresIntegrationTest {
         Client fuzzyMissingCharacter = clientService.create(
                 "Fuzzy", "Missing", "user@hewlettpackerd.io", null
         );
+        Client shortExact = clientService.create("Short", "Exact", "user@he.io", null);
         Client microsoft = clientService.create("Microsoft", "Person", "other@microsoft.com", null);
         Client localPart = clientService.create("Local", "Part", "hewlettpackard.employee@gmail.com", null);
         clientService.create("Near", "Match", "near@myhewlettpackard.com", null);
@@ -252,7 +253,9 @@ class NevisPostgresIntegrationTest {
                 clientSearchQueryNormalizer.normalize("hewlettpackard.employee@gmail.com")
         )).isEmpty();
         assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Hewlett' OR '1'='1"))).isEmpty();
-        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("he"))).isEmpty();
+        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("he")))
+                .extracting(result -> result.client().id())
+                .containsExactly(shortExact.id());
     }
 
     @Test
