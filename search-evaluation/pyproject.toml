@@ -1,0 +1,8 @@
+[project]
+name = "nevis-search-evaluation"
+version = "0.1.0"
+description = "Reproducible offline evaluation for the Nevis Java search service"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

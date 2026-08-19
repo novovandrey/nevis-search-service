@@ -19,6 +19,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/nevis
       DB_USERNAME: nevis
       DB_PASSWORD: nevis
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
     ports:
       - "8080:8080"
     depends_on:

@@ -1,0 +1,211 @@
+{
+  "documents": [
+    {
+      "id": "utility-bill",
+      "title": "Electricity Utility Bill",
+      "content": "Monthly electricity charges for the customer's current residential address at 10 King Street."
+    },
+    {
+      "id": "electricity-statement",
+      "title": "Monthly Electricity Statement",
+      "content": "Statement for electricity supplied to the customer's apartment and home address."
+    },
+    {
+      "id": "bank-statement",
+      "title": "Current Account Bank Statement",
+      "content": "Bank statement showing the account holder name, transactions and registered residential address."
+    },
+    {
+      "id": "passport",
+      "title": "British Passport",
+      "content": "Government-issued passport used to verify the customer's identity and nationality."
+    },
+    {
+      "id": "identity-card",
+      "title": "National Identity Card",
+      "content": "Government identity card with photograph, full name and date of birth."
+    },
+    {
+      "id": "payslip",
+      "title": "Employer Payslip",
+      "content": "Monthly payslip confirming salary, employer and net income for the customer."
+    },
+    {
+      "id": "tax-return",
+      "title": "Annual Tax Return",
+      "content": "Tax return declaring taxable income, allowances and deductions for the financial year."
+    },
+    {
+      "id": "investment-holdings",
+      "title": "Investment Holdings Overview",
+      "content": "Portfolio allocation across equities, government bonds, cash and managed investment funds."
+    },
+    {
+      "id": "risk-review",
+      "title": "Quarterly Investment Risk Review",
+      "content": "Review of market volatility, investment risk tolerance and possible capital losses."
+    },
+    {
+      "id": "meeting-notes",
+      "title": "Financial Adviser Meeting Notes",
+      "content": "Notes from the annual financial planning meeting with the adviser and customer."
+    },
+    {
+      "id": "insurance-policy",
+      "title": "Life Insurance Policy Schedule",
+      "content": "Policy schedule recording life cover, beneficiary and monthly premium."
+    },
+    {
+      "id": "vehicle-service",
+      "title": "Vehicle Service Record",
+      "content": "Record of engine oil replacement, brake inspection and vehicle maintenance."
+    },
+    {
+      "id": "cooking-notes",
+      "title": "Cooking Notes",
+      "content": "Recipe using olive oil, tomatoes, basil and pasta for dinner."
+    }
+  ],
+  "queries": [
+    {
+      "id": "exact-passport",
+      "text": "passport",
+      "category": "EXACT_LEXICAL",
+      "split": "TUNING",
+      "judgments": {"passport": 3, "identity-card": 1}
+    },
+    {
+      "id": "exact-utility-bill",
+      "text": "utility bill",
+      "category": "EXACT_LEXICAL",
+      "split": "TUNING",
+      "judgments": {"utility-bill": 3, "electricity-statement": 2, "bank-statement": 1}
+    },
+    {
+      "id": "exact-meeting-notes",
+      "text": "meeting notes",
+      "category": "EXACT_LEXICAL",
+      "split": "TUNING",
+      "judgments": {"meeting-notes": 3}
+    },
+    {
+      "id": "morphological-addresses",
+      "text": "residential addresses",
+      "category": "MORPHOLOGICAL",
+      "split": "TUNING",
+      "judgments": {"utility-bill": 3, "electricity-statement": 3, "bank-statement": 2, "meeting-notes": 1}
+    },
+    {
+      "id": "morphological-identification",
+      "text": "customer identification",
+      "category": "MORPHOLOGICAL",
+      "split": "TUNING",
+      "judgments": {"passport": 3, "identity-card": 3}
+    },
+    {
+      "id": "domain-proof-of-address",
+      "text": "proof of address",
+      "category": "DOMAIN_VOCABULARY",
+      "split": "TUNING",
+      "judgments": {"utility-bill": 3, "electricity-statement": 3, "bank-statement": 2, "meeting-notes": 1}
+    },
+    {
+      "id": "domain-identity-documentation",
+      "text": "identity documentation",
+      "category": "DOMAIN_VOCABULARY",
+      "split": "TUNING",
+      "judgments": {"passport": 3, "identity-card": 3}
+    },
+    {
+      "id": "natural-where-customer-lives",
+      "text": "where does the customer live",
+      "category": "NATURAL_LANGUAGE",
+      "split": "TUNING",
+      "judgments": {"utility-bill": 3, "electricity-statement": 3, "bank-statement": 2}
+    },
+    {
+      "id": "natural-prove-identity",
+      "text": "document proving who the customer is",
+      "category": "NATURAL_LANGUAGE",
+      "split": "TUNING",
+      "judgments": {"passport": 3, "identity-card": 3}
+    },
+    {
+      "id": "ambiguous-address",
+      "text": "address",
+      "category": "AMBIGUOUS",
+      "split": "TUNING",
+      "judgments": {"utility-bill": 3, "electricity-statement": 3, "bank-statement": 2, "meeting-notes": 1}
+    },
+    {
+      "id": "ambiguous-income",
+      "text": "income",
+      "category": "AMBIGUOUS",
+      "split": "TUNING",
+      "judgments": {"payslip": 3, "tax-return": 3, "bank-statement": 1}
+    },
+    {
+      "id": "ambiguous-investments",
+      "text": "investments",
+      "category": "AMBIGUOUS",
+      "split": "TUNING",
+      "judgments": {"investment-holdings": 3, "risk-review": 2}
+    },
+    {
+      "id": "negative-aircraft",
+      "text": "aircraft maintenance manual",
+      "category": "NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-marine",
+      "text": "marine engine repair",
+      "category": "NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-electricity-statement",
+      "text": "electricity statement",
+      "category": "EXACT_LEXICAL",
+      "split": "HOLDOUT",
+      "judgments": {"electricity-statement": 3, "utility-bill": 2, "bank-statement": 1}
+    },
+    {
+      "id": "holdout-proof-of-residency",
+      "text": "proof of residency",
+      "category": "DOMAIN_VOCABULARY",
+      "split": "HOLDOUT",
+      "judgments": {"utility-bill": 3, "electricity-statement": 3, "bank-statement": 2}
+    },
+    {
+      "id": "holdout-government-identity",
+      "text": "government identity card",
+      "category": "NATURAL_LANGUAGE",
+      "split": "HOLDOUT",
+      "judgments": {"identity-card": 3, "passport": 2}
+    },
+    {
+      "id": "holdout-taxable-earnings",
+      "text": "show my taxable earnings",
+      "category": "NATURAL_LANGUAGE",
+      "split": "HOLDOUT",
+      "judgments": {"tax-return": 3, "payslip": 2}
+    },
+    {
+      "id": "holdout-financial-review-notes",
+      "text": "financial review notes",
+      "category": "MORPHOLOGICAL",
+      "split": "HOLDOUT",
+      "judgments": {"meeting-notes": 3, "risk-review": 1}
+    },
+    {
+      "id": "holdout-negative-lunar",
+      "text": "lunar mining permit",
+      "category": "NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    }
+  ]
+}
