@@ -96,14 +96,15 @@ The response is `201 Created`:
 }
 ```
 
-Find the client by a company-like query derived from the email domain:
+Find clients by a company-like query derived from the email domain. Exact domains rank before
+typo-tolerant matches:
 
 ```bash
-curl "http://localhost:8080/search?q=Nevis%20Wealth"
+curl "http://localhost:8080/search?q=Hewlett%20Packard"
 ```
 
-The global endpoint returns one typed array. Exact company-domain client matches come first in
-deterministic name order, followed by document results in PostgreSQL FTS relevance order:
+The global endpoint returns one typed array. An exact `hewlettpackard.com` client precedes a
+fuzzy `hewlettpackarrd.io` client, followed by document results in PostgreSQL FTS relevance order:
 
 ```json
 [
@@ -156,11 +157,16 @@ client returns `404`; invalid input returns `400`.
 ### `GET /search?q={query}`
 
 Searches clients by company derived from their email domain and documents across all clients.
-Document results combine PostgreSQL FTS, deterministic business-term expansion, and local semantic
-embeddings with weighted Reciprocal Rank Fusion. Client lookup does not search first name, last name, or
-full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`); embeddings and internal
-scores are never exposed. `content` is populated only for `DOCUMENT` results and contains the
-complete stored document text without truncation, snippets, or highlighting.
+Client lookup lowercases and removes query whitespace, then returns exact generated domain keys before
+`pg_trgm` fuzzy matches at threshold `0.50`; it does not search first name, last name, local email parts,
+or substrings. For example, `Hewlett Packard` normalizes to `hewlettpackard` and finds
+`user@hewlettpackarrd.io`; exact `hewlettpackard.com` ranks first. Queries shorter than three normalized
+characters use exact lookup only. A key removes only the final domain suffix, so
+`user@sub.company.co.uk` becomes `sub.company.co`; public-suffix and subdomain resolution are intentionally
+out of scope. Document results independently combine PostgreSQL FTS, deterministic business-term expansion,
+and local semantic embeddings with weighted Reciprocal Rank Fusion. Results have a `type` discriminator
+(`CLIENT` or `DOCUMENT`); embeddings and internal scores are never exposed. `content` is populated only for
+`DOCUMENT` results and contains the complete stored document text without truncation, snippets, or highlighting.
 
 Validation and failures use a consistent response shape:
 
@@ -187,6 +193,7 @@ Validation and failures use a consistent response shape:
 | `SERVER_PORT` | `8080` | HTTP port |
 | `MAX_QUERY_LENGTH` | `255` | Maximum normalized query length |
 | `MAX_SEARCH_RESULTS` | `50` | Maximum merged document results |
+| `CLIENT_TRIGRAM_SIMILARITY_THRESHOLD` | `0.50` | Minimum `pg_trgm` similarity for fuzzy client-company matches |
 | `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum candidates from each retrieval branch |
 | `SEMANTIC_RRF_K` | `60` | Reciprocal Rank Fusion constant |
 | `SEMANTIC_MINIMUM_SIMILARITY` | `0.30` | Minimum cosine similarity for semantic candidates |
@@ -220,6 +227,15 @@ Validation and failures use a consistent response shape:
   remains `0.30`. For `address`, the synthetic boundary measured cosine `0.491570`, while the literal
   `Manual Browser Utility Bill` measured `0.360140`; lexical weight `1.25` keeps literal evidence above
   a semantic-only candidate without sacrificing the measured semantic recall.
+- Client company keys are a stored PostgreSQL generated column. Exact lookup uses a partial B-tree index;
+  typo-tolerant lookup uses the partial `pg_trgm` GIN index with `%` as the candidate predicate and
+  `similarity()` as the final threshold/ranking score. The measured test similarities against
+  `hewlettpackard` are `0.8235294` for `hewlettpackarrd` and `0.6666667` for `hewlettpackerd`; both exceed
+  the configured `0.50` threshold. Exact clients always rank before fuzzy clients, and client ordering does
+  not affect document retrieval.
+- Company-key extraction intentionally removes only the final suffix. Consequently,
+  `user@sub.company.co.uk` produces `sub.company.co`; no public-suffix list or subdomain interpretation is
+  introduced. The email local part and substring matching are deliberately excluded.
 - A dedicated engine or ANN pgvector index becomes justified when search scale, latency, filters,
   analyzers, or operational requirements exceed exact PostgreSQL retrieval.
 

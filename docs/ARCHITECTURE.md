@@ -3,6 +3,31 @@
 The service creates clients and their text documents, then exposes one global search endpoint:
 `GET /search?q=...`. PostgreSQL is the source of truth and all schema changes are Flyway migrations.
 
+## Client company retrieval
+
+Client retrieval is independent of document retrieval. It normalizes a company-like query by lowercasing and
+removing whitespace, then looks up `clients.company_search_key`. This stored generated PostgreSQL column uses
+the valid-email domain only, stripping one final suffix: `user@hewlettpackard.com` becomes `hewlettpackard`.
+The local part never participates. The deliberately simple rule does not resolve public suffixes or subdomains,
+so `user@sub.company.co.uk` becomes `sub.company.co`.
+
+```text
+Hewlett Packard
+       ↓ normalize
+hewlettpackard
+       ├─ exact generated key (partial B-tree index)
+       └─ pg_trgm % candidate (partial GIN index)
+              ↓ similarity >= 0.50
+        fuzzy typo candidates
+```
+
+Exact matches rank first. Fuzzy candidates use PostgreSQL `pg_trgm` `%` as an index-supported candidate
+predicate and `similarity()` for the final threshold and descending ranking, followed by last name, first name,
+and UUID. The real integration fixture measures `0.8235294` for `hewlettpackarrd` and `0.6666667` for
+`hewlettpackerd`, each compared with `hewlettpackard`; both clear the `0.50` default. Queries shorter than
+three normalized characters perform exact matching only. No `LIKE` substring search, local-part matching, or
+client score is added to the document ranking. Clients are still emitted before documents by `/search`.
+
 ## Hybrid document retrieval
 
 Document retrieval has three complementary branches:
