@@ -31,9 +31,17 @@ public class HybridDocumentSearchMerger {
             List<DocumentSearchResult> lexicalResults,
             List<DocumentSearchResult> semanticResults
     ) {
+        return merge(lexicalResults, semanticResults, new HybridSearchConfiguration(rrfK, lexicalWeight, vectorWeight));
+    }
+
+    public List<DocumentSearchResult> merge(
+            List<DocumentSearchResult> lexicalResults,
+            List<DocumentSearchResult> semanticResults,
+            HybridSearchConfiguration configuration
+    ) {
         Map<UUID, MergedDocument> merged = new LinkedHashMap<>();
-        addRankContributions(merged, lexicalResults, lexicalWeight);
-        addRankContributions(merged, semanticResults, vectorWeight);
+        addRankContributions(merged, lexicalResults, configuration.lexicalWeight(), configuration.rrfK());
+        addRankContributions(merged, semanticResults, configuration.vectorWeight(), configuration.rrfK());
 
         return merged.values().stream()
                 .sorted(Comparator
@@ -48,7 +56,8 @@ public class HybridDocumentSearchMerger {
     private void addRankContributions(
             Map<UUID, MergedDocument> merged,
             List<DocumentSearchResult> rankedResults,
-            double weight
+            double weight,
+            int rrfK
     ) {
         for (int index = 0; index < rankedResults.size(); index++) {
             Document document = rankedResults.get(index).document();
@@ -59,5 +68,15 @@ public class HybridDocumentSearchMerger {
     }
 
     private record MergedDocument(Document document, double score) {
+    }
+
+    public record HybridSearchConfiguration(int rrfK, double lexicalWeight, double vectorWeight) {
+
+        public HybridSearchConfiguration {
+            if (rrfK < 1 || !Double.isFinite(lexicalWeight) || lexicalWeight <= 0
+                    || !Double.isFinite(vectorWeight) || vectorWeight <= 0) {
+                throw new IllegalArgumentException("Invalid hybrid search configuration");
+            }
+        }
     }
 }
