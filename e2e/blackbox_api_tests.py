@@ -548,7 +548,7 @@ def test_search_contract(
         assert_search_shape(response, label)
     print("PASS Unicode and punctuation search remain valid HTTP/JSON")
 
-    impossible_query = f"qzxv{uuid.uuid4().hex}"
+    impossible_query = "volcanic magma beneath tectonic plates"
     response = search_request(base_url, impossible_query)
     expect_status(response, 200, "no-result search")
     results = assert_search_shape(response, "no-result search")
