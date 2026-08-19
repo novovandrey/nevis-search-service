@@ -8,6 +8,8 @@ import com.nevis.search.application.QueryNormalizer;
 import com.nevis.search.application.SearchService;
 import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.DocumentSearchPort;
+import com.nevis.search.application.port.EmbeddingPort;
+import com.nevis.search.application.port.SemanticDocumentSearchPort;
 import com.nevis.search.domain.Client;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentSearchResult;
@@ -24,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
 import java.util.Set;
@@ -43,7 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class NevisPostgresIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17.6-alpine")
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+            DockerImageName.parse("pgvector/pgvector:0.8.1-pg17").asCompatibleSubstituteFor("postgres")
+    )
             .withDatabaseName("nevis_test")
             .withUsername("nevis")
             .withPassword("nevis");
@@ -81,6 +86,12 @@ class NevisPostgresIntegrationTest {
 
     @Autowired
     DocumentSearchPort documentSearchPort;
+
+    @Autowired
+    SemanticDocumentSearchPort semanticDocumentSearchPort;
+
+    @Autowired
+    EmbeddingPort embeddingPort;
 
     @Autowired
     MockMvc mockMvc;
@@ -138,6 +149,11 @@ class NevisPostgresIntegrationTest {
                 .single();
 
         assertThat(vector).contains("'util'", "'bill'", "'residenti'", "'address'");
+        assertThat(jdbcClient.sql("SELECT vector_dims(embedding) FROM documents WHERE id = :id")
+                .param("id", document.id())
+                .query(Integer.class)
+                .single())
+                .isEqualTo(384);
         assertThatThrownBy(() -> jdbcClient.sql("""
                         INSERT INTO documents (id, client_id, title, content, created_at)
                         VALUES (:id, :clientId, 'Invalid', 'Invalid', now())
@@ -202,12 +218,53 @@ class NevisPostgresIntegrationTest {
         Document titleMatch = documentService.create(client.id(), "Passport", "Official identity record");
         Document contentMatch = documentService.create(client.id(), "Identity Record", "Contains a passport copy");
 
-        List<DocumentSearchResult> results = documentSearchPort.search(Set.of("passports"));
+        List<DocumentSearchResult> results = documentSearchPort.search(Set.of("passports"), 50);
 
         assertThat(results).extracting(result -> result.document().id())
                 .containsExactly(titleMatch.id(), contentMatch.id());
         assertThat(results.getFirst().relevance()).isGreaterThan(results.getLast().relevance());
-        assertThat(documentSearchPort.search(Set.of("unfindable"))).isEmpty();
+        assertThat(documentSearchPort.search(Set.of("unfindable"), 50)).isEmpty();
+    }
+
+    @Test
+    void semanticSearchFindsConceptualMatchWithoutExplicitTermMapping() {
+        Client client = clientService.create("Semantic", "Tester", "semantic@example.com", null);
+        Document electricityStatement = documentService.create(
+                client.id(),
+                "Monthly statement",
+                "The customer receives a monthly electricity statement for the apartment at 10 King Street."
+        );
+        documentService.create(
+                client.id(),
+                "Cooking notes",
+                "The recipe uses olive oil, tomatoes, basil and pasta for dinner."
+        );
+
+        String query = "evidence of where the customer lives";
+        assertThat(queryExpander.expand(queryNormalizer.normalize(query))).containsExactly(query);
+        assertThat(documentSearchPort.search(Set.of(query), 50)).isEmpty();
+
+        List<DocumentSearchResult> semanticResults = semanticDocumentSearchPort.search(embeddingPort.embed(query), 1, 0.15);
+
+        assertThat(semanticResults).extracting(result -> result.document().id())
+                .containsExactly(electricityStatement.id());
+        assertThat(searchService.search(query).documents()).extracting(result -> result.document().id())
+                .contains(electricityStatement.id());
+    }
+
+    @Test
+    void hybridSearchReturnsDocumentOnceWhenBothRetrieversFindIt() {
+        Client client = clientService.create("Hybrid", "Tester", "hybrid@example.com", null);
+        Document document = documentService.create(
+                client.id(), "Passport", "A scanned passport belonging to the customer"
+        );
+
+        assertThat(documentSearchPort.search(Set.of("passport"), 50))
+                .extracting(result -> result.document().id()).contains(document.id());
+        assertThat(semanticDocumentSearchPort.search(embeddingPort.embed("passport"), 50, 0.15))
+                .extracting(result -> result.document().id()).contains(document.id());
+        assertThat(searchService.search("passport").documents())
+                .extracting(result -> result.document().id()).containsOnlyOnce(document.id());
     }
 
     @Test

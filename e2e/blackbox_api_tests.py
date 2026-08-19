@@ -568,6 +568,23 @@ def test_http_robustness(base_url: str, client_id: str) -> None:
     print("PASS unsupported client content type returns 415")
 
 
+def test_semantic_search(base_url: str, client_id: str) -> None:
+    semantic_document_id, _ = create_document(
+        base_url,
+        client_id,
+        "Monthly electricity statement",
+        "The tenant receives monthly electricity statements for the apartment at 10 King Street.",
+    )
+    response = search_request(base_url, "evidence showing where the person lives")
+    expect_status(response, 200, "semantic document search")
+    assert_search_shape(response, "semantic document search")
+    check(
+        contains_entity_with_id(response.body, semantic_document_id),
+        f"semantic search did not return document {semantic_document_id}: {response.raw}",
+    )
+    print("PASS semantic search finds a document without lexical overlap or an explicit term mapping")
+
+
 def run(base_url: str) -> None:
     token = uuid.uuid4().hex[:12]
     print(f"Target: {base_url}")
@@ -584,6 +601,7 @@ def run(base_url: str) -> None:
     max_title_prefix = f"Household Statement {token} "
     max_title = max_title_prefix + string_of_length(TITLE_MAX - len(max_title_prefix), "a")
     test_search_contract(base_url, client_id, max_document_id, max_title, document_content, token)
+    test_semantic_search(base_url, client_id)
     test_http_robustness(base_url, client_id)
 
     print()

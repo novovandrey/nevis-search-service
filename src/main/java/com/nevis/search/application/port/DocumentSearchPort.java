@@ -7,5 +7,5 @@ import java.util.Set;
 
 public interface DocumentSearchPort {
 
-    List<DocumentSearchResult> search(Set<String> terms);
+    List<DocumentSearchResult> search(Set<String> terms, int limit);
 }

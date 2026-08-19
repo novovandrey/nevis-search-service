@@ -4,5 +4,5 @@ import com.nevis.search.domain.Document;
 
 public interface DocumentRepository {
 
-    Document save(Document document);
+    Document save(Document document, float[] embedding);
 }

@@ -20,8 +20,8 @@ public class PostgresDocumentSearchAdapter implements DocumentSearchPort {
     }
 
     @Override
-    public List<DocumentSearchResult> search(Set<String> terms) {
-        if (terms.isEmpty()) {
+    public List<DocumentSearchResult> search(Set<String> terms, int limit) {
+        if (terms.isEmpty() || limit < 1) {
             return List.of();
         }
 
@@ -42,12 +42,14 @@ public class PostgresDocumentSearchAdapter implements DocumentSearchPort {
                 WHERE d.search_vector @@ queries.query
                 GROUP BY d.id, d.client_id, d.title, d.content, d.created_at
                 ORDER BY relevance DESC, d.created_at DESC, d.id
+                LIMIT :limit
                 """.formatted(placeholders);
 
         JdbcClient.StatementSpec statement = jdbcClient.sql(sql);
         for (int index = 0; index < orderedTerms.size(); index++) {
             statement = statement.param("term" + index, orderedTerms.get(index));
         }
+        statement = statement.param("limit", limit);
         return statement.query((resultSet, rowNumber) -> {
             Document document = PostgresDocumentRepository.mapDocument(resultSet, rowNumber);
             return new DocumentSearchResult(document, resultSet.getDouble("relevance"));

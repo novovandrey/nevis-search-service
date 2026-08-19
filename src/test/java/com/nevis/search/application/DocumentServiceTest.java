@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,8 +37,45 @@ class DocumentServiceTest {
                 .hasMessageContaining("1000");
     }
 
+    @Test
+    void doesNotPersistDocumentWhenEmbeddingGenerationFails() {
+        UUID clientId = UUID.randomUUID();
+        AtomicBoolean saved = new AtomicBoolean();
+        ClientRepository clients = clientRepository(clientId);
+        DocumentRepository documents = (document, embedding) -> {
+            saved.set(true);
+            return document;
+        };
+        DocumentService service = new DocumentService(
+                clients, documents, text -> {
+                    throw new IllegalStateException("Embedding unavailable");
+                }, new DocumentProperties(1_000)
+        );
+
+        assertThatThrownBy(() -> service.create(clientId, "Title", "Content"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Embedding unavailable");
+        assertThat(saved).isFalse();
+    }
+
     private DocumentService service(UUID knownClientId) {
-        ClientRepository clients = new ClientRepository() {
+        ClientRepository clients = clientRepository(knownClientId);
+        DocumentRepository documents = new DocumentRepository() {
+            @Override
+            public Document save(Document document, float[] embedding) {
+                return document;
+            }
+        };
+        return new DocumentService(
+                clients,
+                documents,
+                text -> new float[384],
+                new DocumentProperties(1_000)
+        );
+    }
+
+    private ClientRepository clientRepository(UUID knownClientId) {
+        return new ClientRepository() {
             @Override
             public Client save(Client client) {
                 return client;
@@ -53,16 +91,5 @@ class DocumentServiceTest {
                 return knownClientId.equals(id);
             }
         };
-        DocumentRepository documents = new DocumentRepository() {
-            @Override
-            public Document save(Document document) {
-                return document;
-            }
-        };
-        return new DocumentService(
-                clients,
-                documents,
-                new DocumentProperties(1_000)
-        );
     }
 }

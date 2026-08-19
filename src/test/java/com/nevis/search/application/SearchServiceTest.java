@@ -2,7 +2,10 @@ package com.nevis.search.application;
 
 import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.DocumentSearchPort;
+import com.nevis.search.application.port.EmbeddingPort;
+import com.nevis.search.application.port.SemanticDocumentSearchPort;
 import com.nevis.search.config.SearchProperties;
+import com.nevis.search.config.SemanticSearchProperties;
 import com.nevis.search.domain.Client;
 import com.nevis.search.domain.ClientSearchQuery;
 import com.nevis.search.domain.ClientSearchResult;
@@ -21,8 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SearchServiceTest {
 
     @Test
-    void orchestratesClientAndDocumentSearchWithoutMergingScores() {
-        SearchProperties properties = new SearchProperties(255);
+    void orchestratesLexicalAndSemanticDocumentSearch() {
+        SearchProperties properties = new SearchProperties(255, 50);
+        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(50, 60, 0.15);
         QueryNormalizer normalizer = new QueryNormalizer(properties);
         ClientSearchQueryNormalizer clientNormalizer = new ClientSearchQueryNormalizer(properties);
         QueryExpander expander = new QueryExpander(query -> Set.of("utility bill"));
@@ -36,12 +40,15 @@ class SearchServiceTest {
             return List.of(new ClientSearchResult(client));
         };
         AtomicReference<Set<String>> capturedTerms = new AtomicReference<>();
-        DocumentSearchPort documentSearch = terms -> {
+        DocumentSearchPort documentSearch = (terms, limit) -> {
             capturedTerms.set(terms);
             return List.of(new DocumentSearchResult(document, 0.4));
         };
+        SemanticDocumentSearchPort semanticSearch = (embedding, limit, minimumSimilarity) -> List.of();
+        EmbeddingPort embeddings = text -> new float[384];
         SearchService service = new SearchService(
-                normalizer, clientNormalizer, expander, clientSearch, documentSearch
+                normalizer, clientNormalizer, expander, clientSearch, documentSearch,
+                semanticSearch, embeddings, new HybridDocumentSearchMerger(semanticProperties, properties), semanticProperties
         );
 
         SearchService.GlobalSearchResults result = service.search("Address Proof");

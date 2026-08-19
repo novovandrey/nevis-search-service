@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QueryNormalizerTest {
 
-    private final QueryNormalizer normalizer = new QueryNormalizer(new SearchProperties(255));
+    private final QueryNormalizer normalizer = new QueryNormalizer(new SearchProperties(255, 50));
 
     @Test
     void normalizesCaseWhitespaceAndSeparators() {

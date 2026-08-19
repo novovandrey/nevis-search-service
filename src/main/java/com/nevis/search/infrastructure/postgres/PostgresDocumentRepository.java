@@ -13,6 +13,8 @@ import java.util.UUID;
 @Repository
 public class PostgresDocumentRepository implements DocumentRepository {
 
+    private static final int EMBEDDING_DIMENSION = 384;
+
     private final JdbcClient jdbcClient;
 
     public PostgresDocumentRepository(JdbcClient jdbcClient) {
@@ -20,16 +22,17 @@ public class PostgresDocumentRepository implements DocumentRepository {
     }
 
     @Override
-    public Document save(Document document) {
+    public Document save(Document document, float[] embedding) {
         jdbcClient.sql("""
-                        INSERT INTO documents (id, client_id, title, content, created_at)
-                        VALUES (:id, :clientId, :title, :content, :createdAt)
+                        INSERT INTO documents (id, client_id, title, content, created_at, embedding)
+                        VALUES (:id, :clientId, :title, :content, :createdAt, CAST(:embedding AS vector))
                         """)
                 .param("id", document.id())
                 .param("clientId", document.clientId())
                 .param("title", document.title())
                 .param("content", document.content())
                 .param("createdAt", Timestamp.from(document.createdAt()))
+                .param("embedding", toVectorLiteral(embedding))
                 .update();
         return document;
     }
@@ -42,5 +45,22 @@ public class PostgresDocumentRepository implements DocumentRepository {
                 resultSet.getString("content"),
                 resultSet.getTimestamp("created_at").toInstant()
         );
+    }
+
+    static String toVectorLiteral(float[] embedding) {
+        if (embedding == null || embedding.length != EMBEDDING_DIMENSION) {
+            throw new IllegalArgumentException("Embedding must have " + EMBEDDING_DIMENSION + " dimensions");
+        }
+        StringBuilder literal = new StringBuilder("[");
+        for (int index = 0; index < embedding.length; index++) {
+            if (!Float.isFinite(embedding[index])) {
+                throw new IllegalArgumentException("Embedding must contain only finite values");
+            }
+            if (index > 0) {
+                literal.append(',');
+            }
+            literal.append(embedding[index]);
+        }
+        return literal.append(']').toString();
     }
 }

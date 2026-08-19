@@ -3,10 +3,10 @@ package com.nevis.search.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("nevis.search")
-public record SearchProperties(int maxQueryLength) {
+public record SearchProperties(int maxQueryLength, int maxResults) {
 
     public SearchProperties {
-        if (maxQueryLength < 1) {
+        if (maxQueryLength < 1 || maxResults < 1) {
             throw new IllegalArgumentException("Invalid nevis.search configuration");
         }
     }

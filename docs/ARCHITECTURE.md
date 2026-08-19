@@ -1,389 +1,82 @@
-# Nevis Search Service — As-Built Architecture
+# Nevis Search Service architecture
 
-> Status: implementation architecture as of 2026-08-18.
->
-> The implementation plan and this as-built document describe the current final design. The narrower
-> client-search requirements in [`CLIENT_SEARCH_PLAN.md`](CLIENT_SEARCH_PLAN.md) supersede the older
-> client-search design for that capability.
-> [`search-api-cleanup-plan.md`](search-api-cleanup-plan.md) supersedes it for the removed
-> client-specific document `GET` endpoint.
-> This document describes the code that actually exists in the repository.
+The service creates clients and their text documents, then exposes one global search endpoint:
+`GET /search?q=...`. PostgreSQL is the source of truth and all schema changes are Flyway migrations.
 
-## 1. Implemented scope
+## Hybrid document retrieval
 
-The service implements:
-
-- client creation;
-- creation of text documents owned by a client;
-- global client and document search through a typed result array;
-- deterministic client discovery only by company keys derived from corporate email domains;
-- deterministic business-term expansion backed by PostgreSQL;
-- Flyway-managed PostgreSQL schema and seed data;
-- OpenAPI/Swagger documentation;
-- Docker Compose runtime configuration;
-- unit tests and PostgreSQL/Testcontainers integration tests.
-
-The optional document-summary capability was not implemented. No functionality from the plan's
-non-goals was introduced.
-
-## 2. Technology baseline
-
-| Area | Implemented choice |
-|---|---|
-| Language | Java 25 |
-| Framework | Spring Boot 4.1.0 / Spring Framework 7 |
-| Build | Maven |
-| HTTP | Spring MVC with embedded Tomcat |
-| Database access | Spring `JdbcClient` |
-| Source of truth | PostgreSQL 17.6 image in local/test configuration |
-| Schema management | Flyway |
-| Document search | PostgreSQL FTS (`tsvector`, `websearch_to_tsquery`, `ts_rank_cd`) |
-| API documentation | springdoc-openapi 3.0.3 / Swagger UI |
-| Database tests | Testcontainers 2.0.5 with PostgreSQL 17.6 |
-| Local orchestration | Docker Compose |
-
-## 3. Architecture overview
-
-The code is a lightweight ports-and-adapters application. Spring dependency injection performs the
-runtime wiring, but application services depend only on application ports and domain types.
-
-```mermaid
-flowchart TB
-    HTTP["HTTP clients"] --> API["API controllers and DTOs"]
-    API --> APP["Application services"]
-    APP --> DOMAIN["Domain records and query values"]
-    APP --> PORTS["Application ports"]
-    PGADAPTERS["PostgreSQL adapters"] -. "implement" .-> PORTS
-    PGADAPTERS --> PG[("PostgreSQL")]
-    FLYWAY["Flyway V1 migration"] --> PG
-```
-
-Dependency direction in source code:
+Document retrieval has three complementary branches:
 
 ```text
-api -> application -> application.port + domain
-infrastructure.postgres -> application.port + domain
+normalized query
+ ├─ PostgreSQL FTS + explicit search_term_mapping expansion
+ └─ local embedding + pgvector cosine similarity
+                 ↓
+        Reciprocal Rank Fusion (RRF)
 ```
 
-The `application`, `domain`, and `api` packages do not contain SQL or import `JdbcClient`.
-PostgreSQL-specific FTS syntax remains under `infrastructure.postgres` and in Flyway migrations.
+- FTS handles exact terms, stemming and deterministic title/content weighting.
+- `search_term_mapping` guarantees domain concepts such as `address proof` → `utility bill`.
+- semantic search finds paraphrases with low lexical overlap, for example a request for evidence
+  of residence and an electricity statement.
 
-## 4. Package and component map
+The application keeps these capabilities behind ports: `DocumentSearchPort` is the lexical FTS
+port, `SemanticDocumentSearchPort` retrieves vectors, and `EmbeddingPort` creates embeddings.
+PostgreSQL SQL and the ONNX model adapter remain in infrastructure packages; controllers only call
+application services.
 
-### `com.nevis.search.api`
+## Embeddings and storage
 
-| Component | Responsibility |
-|---|---|
-| `ClientController` | `POST /clients` |
-| `DocumentController` | document creation for an explicit client |
-| `SearchController` | global client/document search facade |
-| `ApiExceptionHandler` | consistent `400`, `404`, and safe `500` responses |
-| `api.dto` | validated request DTOs and external response models |
+`LocalMiniLmEmbeddingAdapter` runs the packaged LangChain4j ONNX implementation of
+`all-MiniLM-L6-v2` in the application process. It produces a 384-dimensional vector and needs no
+API key or separately managed model service. The model/native runtime are Maven dependencies, so
+they are downloaded at build time; application startup initializes the local model and therefore
+uses additional CPU and memory.
 
-API DTOs are separate from domain records. Global search uses the sealed
-`SearchResultResponse` hierarchy with the `CLIENT` / `DOCUMENT` discriminator.
-The external contract uses `first_name` and `last_name` for client names and `client_id` and
-`created_at` for document ownership/timestamps. `countryOfResidence` remains camelCase as specified
-by the supplied contract. Java records keep idiomatic camelCase component names, with Jackson
-annotations defining the wire representation; legacy camelCase client-name request fields remain
-accepted as aliases.
+`V2__add_document_embeddings.sql` enables pgvector and adds `documents.embedding vector(384)`.
+New document writes must include an embedding. Existing rows from a V1-only deployment remain
+readable but need a deliberate reindex before they participate in semantic search.
 
-### `com.nevis.search.application`
-
-| Component | Responsibility |
-|---|---|
-| `ClientService` | creates clients and delegates persistence |
-| `DocumentService` | verifies client existence and creates documents |
-| `SearchService` | orchestrates global client and all-client document search |
-| `QueryNormalizer` | canonicalizes and validates raw queries |
-| `ClientSearchQueryNormalizer` | converts company queries to exact comparison keys |
-| `QueryExpander` | combines the original query with explicit related business terms |
-
-`ClientNotFoundException` and `InvalidRequestException` represent expected application failures.
-
-### `com.nevis.search.application.port`
-
-| Port | Capability |
-|---|---|
-| `ClientRepository` | client persistence and existence checks |
-| `DocumentRepository` | document persistence |
-| `ClientSearchPort` | exact company-domain client discovery |
-| `DocumentSearchPort` | ranked all-client document search |
-| `QueryExpansionPort` | lookup of related business terms |
-
-CRUD and search remain separate capabilities even though PostgreSQL currently implements both.
-
-### `com.nevis.search.infrastructure.postgres`
-
-| Adapter | Implementation detail |
-|---|---|
-| `PostgresClientRepository` | JDBC client inserts/lookups |
-| `PostgresDocumentRepository` | JDBC document inserts |
-| `PostgresClientSearchAdapter` | exact company-key matching derived from email domains |
-| `PostgresDocumentSearchAdapter` | PostgreSQL FTS and ranking |
-| `PostgresQueryExpansionAdapter` | group lookup in `search_term_mapping` |
-
-## 5. Domain model and ownership
-
-The implemented domain records are:
+When a document is created, `DocumentService` builds one deterministic semantic input:
 
 ```text
-Client
-  id: UUID
-  firstName: String
-  lastName: String
-  email: String
-  countryOfResidence: String?
+<title>
 
-Document
-  id: UUID
-  clientId: UUID
-  title: String
-  content: String
-  createdAt: Instant
+<content>
 ```
 
-Every `Document` carries a non-null `clientId`. The database foreign key guarantees that the owner
-exists.
+It generates the embedding before inserting the document, within the service transaction. An
+embedding failure therefore returns a server error instead of silently creating an unindexed
+document. Document content is preserved as supplied; it is not stripped before storage.
 
-There is no Tenant entity, hidden client context, `ThreadLocal`, authentication scope, RLS, or
-database-per-client routing.
+## Ranking and limits
 
-Client search uses a separate `ClientSearchQuery` value containing the normalized company key.
+PostgreSQL uses exact cosine-distance scans (`<=>`) for the small take-home dataset. There is no
+ANN index yet; HNSW/IVFFlat becomes appropriate only after dataset size and latency measurements
+justify its operational cost.
 
-## 6. PostgreSQL schema
-
-`V1__initial_schema.sql` is the sole owner of the initial schema.
-
-### `clients`
-
-- UUID primary key;
-- bounded first name, last name, email, and optional country;
-- email is deliberately not unique because the task did not define that invariant.
-
-### `documents`
-
-- UUID primary key;
-- mandatory `client_id` foreign key to `clients`;
-- title, text content, and `TIMESTAMPTZ` creation time;
-- stored generated `search_vector`;
-- title tokens have weight `A` and content tokens have weight `B`;
-- GIN index on `search_vector`;
-- B-tree index on `client_id`.
-
-The generated expression uses the PostgreSQL `english` text-search configuration.
-
-### `search_term_mapping`
-
-The table has `group_key` and `term`, with a primary key on `(group_key, term)`. Flyway seeds one
-`proof_of_address` group:
+Both retrievers are bounded by `nevis.search.semantic.candidate-limit`. Semantic candidates must
+also meet `minimum-similarity`. Raw FTS and cosine scores are never added directly. Instead RRF
+combines ranks:
 
 ```text
-address proof
-proof of address
-proof of residency
-utility bill
-bank statement
+score(document) = Σ 1 / (rrf-k + rank)
 ```
 
-Adding a term requires one row rather than pairwise synonym mappings.
+The same document in both lists receives both contributions and is emitted once. Ties are ordered
+by creation time and UUID, and the final document list is bounded by `nevis.search.max-results`.
+If embedding/query vector retrieval fails during search, the service logs the failure and still
+returns lexical results.
 
-## 7. Search design
+## Runtime and tests
 
-### 7.1 Query normalization
+Docker Compose uses the pinned `pgvector/pgvector:0.8.1-pg17` image and exposes only the API port.
+Testcontainers uses the same image for PostgreSQL integration tests. Unit tests cover query rules,
+the local embedding relation and RRF. Integration tests cover Flyway/pgvector persistence,
+semantic retrieval, FTS, term expansion and hybrid deduplication; the Python suite adds an HTTP
+semantic-search scenario.
 
-`QueryNormalizer`:
-
-1. rejects null or blank input;
-2. trims and lowercases with `Locale.ROOT`;
-3. converts `-`, `_`, `/`, and `\` separators to spaces;
-4. collapses repeated whitespace;
-5. requires at least one letter or digit;
-6. enforces `MAX_QUERY_LENGTH`, default `255`.
-
-`ClientSearchQueryNormalizer` separately normalizes a human company query by trimming it,
-lowercasing it with `Locale.ROOT`, and removing whitespace. It does not remove other punctuation or
-apply fuzzy matching. Thus all of these produce `neviswealth`:
-
-```text
-Nevis Wealth
-nevis wealth
-NEVIS WEALTH
-neviswealth
-```
-
-### 7.2 Business-term expansion
-
-`QueryExpander` always includes the normalized original term. The PostgreSQL expansion adapter
-finds a matching mapping group and returns every term in that group. A `LinkedHashSet` deduplicates
-the result. Expansion is one level only and performs no fuzzy or recursive inference.
-
-### 7.3 Client search
-
-`PostgresClientSearchAdapter` validates the stored email shape defensively, extracts the domain,
-lowercases it, and removes its final top-level-domain segment. For example:
-
-```text
-Nevis Wealth -> neviswealth
-anton.batiaev@neviswealth.com -> neviswealth.com -> neviswealth
-```
-
-Only exact equality between the normalized query and derived company key matches. There is no
-contains/prefix/fuzzy matching and no client lookup by first name, last name, or full email. Rows
-with malformed email values or domains that cannot produce a key are ignored rather than failing
-the entire search. Multiple exact company matches are ordered by last name, first name, and UUID.
-
-### 7.4 Document FTS
-
-`PostgresDocumentSearchAdapter` binds every expanded term as a SQL parameter and converts it with
-`websearch_to_tsquery('english', term)`. The terms are evaluated with OR semantics by matching each
-document against all generated queries. The maximum `ts_rank_cd` value is used as that document's
-relevance.
-
-Ordering is relevance descending, creation time descending, then UUID.
-
-Document FTS is used only by the required global search facade, so its port has no client-scope
-parameter or PostgreSQL `client_id` predicate.
-
-## 8. Request flows
-
-### Create document
-
-```mermaid
-sequenceDiagram
-    participant HTTP
-    participant Controller as DocumentController
-    participant Service as DocumentService
-    participant Clients as ClientRepository
-    participant Documents as DocumentRepository
-    participant DB as PostgreSQL
-
-    HTTP->>Controller: POST /clients/{id}/documents
-    Controller->>Service: create(clientId, title, content)
-    Service->>Clients: existsById(clientId)
-    Clients->>DB: SELECT EXISTS with clientId
-    Service->>Documents: save(Document with clientId)
-    Documents->>DB: INSERT document
-    Controller-->>HTTP: 201 Created
-```
-
-### Global search
-
-`SearchService` creates a company-specific `ClientSearchQuery`, separately normalizes the document
-query, calls `ClientSearchPort`, expands document terms, calls `DocumentSearchPort`, and returns
-the two result groups without inventing a shared score. `SearchController`
-serializes client results first and document results second. The HTTP contract has no result-limit
-parameter and returns all matches in the deterministic order described above.
-
-## 9. HTTP API as implemented
-
-| Method and path | Behaviour |
-|---|---|
-| `POST /clients` | Creates and returns a client with `201` and `Location` |
-| `POST /clients/{id}/documents` | Creates a client-owned text document |
-| `GET /search?q=...` | Searches clients and all-client documents |
-
-OpenAPI annotations on the controllers document the actual `201`, `200`, `400`, `404`, and `500`
-responses and their response schemas.
-
-Request validation includes bounded names, email syntax, bounded title, non-blank content,
-configurable content size, non-blank searchable queries, maximum query length, and valid UUIDs.
-
-Expected errors use `ApiError`:
-
-```text
-timestamp, status, error, message, path, violations[]
-```
-
-Malformed requests and validation failures return `400`. Unknown clients in document operations
-return `404`, and unsupported request media types return `415`. Unexpected failures return a
-generic `500`; the response does not expose SQL or stack traces.
-
-## 10. Configuration and runtime
-
-`application.yml` maps environment variables for the datasource, server port, query length, and
-document content limit. Defaults target the Compose PostgreSQL service for the standard
-local workflow.
-
-`compose.yaml` defines:
-
-- pinned `postgres:17.6-alpine` with a health check and persistent volume;
-- an application image built by the repository `Dockerfile`;
-- application port `8080`, mapped to host port `8080`, plus PostgreSQL port `5432` for local database
-  access;
-- application startup after PostgreSQL becomes healthy;
-- automatic Flyway execution during Spring Boot startup.
-
-The Dockerfile is a multi-stage Java 25 build. The runtime process uses numeric non-root user
-`10001`.
-
-## 11. Testing architecture
-
-Pure unit tests cover:
-
-- document-query normalization, separator handling, blank/punctuation-only input, and maximum query
-  length;
-- company-query case/whitespace normalization and the deliberate absence of fuzzy punctuation rules;
-- expansion, original-term preservation, and deduplication;
-- global-search orchestration;
-- unknown-client document creation and content-size enforcement.
-
-`NevisPostgresIntegrationTest` uses a real PostgreSQL Testcontainer and covers:
-
-- Flyway migrations, generated search vector, and foreign-key enforcement;
-- exact company-domain search, non-matches, exclusion of name/full-email lookup, and malformed stored
-  email handling;
-- mapping-group expansion and negative expansion;
-- PostgreSQL stemming, title weighting, ranking, and no-result behaviour;
-- business-term expansion with global document search;
-- API creation, validation, malformed JSON, unsupported media type, unknown client, typed global
-  results, and empty results;
-- the external snake_case JSON contract and generated OpenAPI models/status codes.
-
-The integration class uses `disabledWithoutDocker = true`: environments with Docker execute it;
-environments without Docker skip it instead of substituting H2.
-
-Verification at the time this document was created:
-
-- `mvn verify` builds the executable JAR successfully;
-- all 16 tests pass on a Docker-enabled Ubuntu mini PC: 10 unit tests and 6 PostgreSQL/API
-  integration tests;
-- Testcontainers starts the pinned PostgreSQL 17.6 image, and Flyway applies `V1__initial_schema.sql`
-  to an empty schema;
-- the Docker image builds and starts successfully with PostgreSQL from `compose.yaml`;
-- an HTTP smoke test verifies OpenAPI, client and document creation, company-domain search,
-  related-term document search, and unsupported-media-type `415` handling;
-- the repository Compose configuration maps the application to host port `8080`.
-
-## 12. Plan-to-implementation notes
-
-The implementation preserves the plan's boundaries. Equivalent concrete choices are:
-
-- `CLIENT_SEARCH_PLAN.md` deliberately narrows the older plan: client lookup is company-domain only;
-  earlier name and full-email matching was removed after this product decision was made explicit;
-- `ClientSearchPort` uses the plan's `search(ClientSearchQuery)` shape;
-- `search-api-cleanup-plan.md` supersedes the older plan's client-scoped list/search endpoint:
-  only `GET /search` searches documents, and `DocumentSearchPort` receives expanded terms and a
-  without a no-longer-needed scope type;
-- PostgreSQL query construction remains in the adapter;
-- expanded alternatives use separate safe `websearch_to_tsquery` values and maximum matching rank,
-  which provides the planned OR semantics without application-level `tsquery` construction;
-- Maven was selected because the empty repository had no pre-existing build tool;
-- optional summarization was intentionally left out after the core implementation.
-
-No unresolved discrepancy between the agreed architectural boundaries and the implementation is
-known. Docker-dependent integration and smoke verification have been completed.
-
-## 13. Deliberate non-goals
-
-The repository does not implement:
-
-- Tenant concepts, authentication, authorization, RLS, or database-per-client isolation;
-- Elasticsearch, OpenSearch, Lucene, vectors, embeddings, or LLM search;
-- file upload, binary storage, S3, PDF parsing, OCR, or asynchronous ingestion;
-- Kafka, microservice decomposition, or an observability stack;
-- optional document summarization.
-
-Future search-engine replacement should implement `DocumentSearchPort`. Future business-taxonomy
-storage should implement `QueryExpansionPort`. Neither change should require rewriting controllers
-or application orchestration.
+The main trade-offs are embedding CPU/startup cost, the need to reindex if the model changes, and
+semantic results being less deterministic than lexical matches. Keeping vectors in PostgreSQL is
+the simplest operational choice for this service; larger deployments may need ANN indexing or a
+dedicated retrieval system.

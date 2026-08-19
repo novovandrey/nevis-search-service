@@ -1,14 +1,9 @@
 # Nevis Search Service
 
 Java 25 / Spring Boot service for creating clients, storing their text documents, finding clients,
-and searching documents with PostgreSQL Full Text Search.
+and searching documents with hybrid lexical and semantic retrieval.
 
-The as-built architecture is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and the implementation
-decisions are recorded in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
-the strict company-domain client-search rules are in
-[`docs/CLIENT_SEARCH_PLAN.md`](docs/CLIENT_SEARCH_PLAN.md). The requirements audit and its
-execution evidence are in [`docs/REQUIREMENTS_AUDIT.md`](docs/REQUIREMENTS_AUDIT.md) and
-[`docs/REQUIREMENTS_AUDIT_REPORT.md`](docs/REQUIREMENTS_AUDIT_REPORT.md).
+The as-built design is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Run locally
 
@@ -45,9 +40,9 @@ The default connection is `jdbc:postgresql://localhost:5432/nevis` with username
 mvn test
 ```
 
-Pure application tests run directly. Database, search, migration, isolation, and API integration
-tests use a real pinned PostgreSQL image through Testcontainers; Docker must be available for those
-tests. H2 is intentionally not used.
+Pure application tests run directly. Database, vector-search, migration, isolation, and API
+integration tests use a real pinned pgvector PostgreSQL image through Testcontainers; Docker must
+be available for those tests. H2 is intentionally not used.
 
 ## Example workflow
 
@@ -160,12 +155,12 @@ client returns `404`; invalid input returns `400`.
 
 ### `GET /search?q={query}`
 
-Searches clients by company derived from their email domain and searches documents across all
-clients, as required by the assignment. Client lookup does not search first name, last name, or
-full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`). Client and document
-relevance values are deliberately not exposed as one fake cross-type score. `content` is populated
-only for `DOCUMENT` results and contains the complete stored document text without truncation,
-snippets, or highlighting.
+Searches clients by company derived from their email domain and documents across all clients.
+Document results combine PostgreSQL FTS, deterministic business-term expansion, and local semantic
+embeddings with Reciprocal Rank Fusion. Client lookup does not search first name, last name, or
+full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`); embeddings and internal
+scores are never exposed. `content` is populated only for `DOCUMENT` results and contains the
+complete stored document text without truncation, snippets, or highlighting.
 
 Validation and failures use a consistent response shape:
 
@@ -191,15 +186,21 @@ Validation and failures use a consistent response shape:
 | `DB_PASSWORD` | `nevis` | Database password |
 | `SERVER_PORT` | `8080` | HTTP port |
 | `MAX_QUERY_LENGTH` | `255` | Maximum normalized query length |
+| `MAX_SEARCH_RESULTS` | `50` | Maximum merged document results |
+| `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum candidates from each retrieval branch |
+| `SEMANTIC_RRF_K` | `60` | Reciprocal Rank Fusion constant |
+| `SEMANTIC_MINIMUM_SIMILARITY` | `0.15` | Minimum cosine similarity for semantic candidates |
 | `MAX_DOCUMENT_CONTENT_LENGTH` | `1000000` | Maximum document content length |
 
 ## Architecture decisions
 
-- PostgreSQL is both the source of truth and the initial search implementation. A generated,
-  weighted `tsvector` and GIN index provide document search without a second datastore.
-- CRUD repositories, `ClientSearchPort`, `DocumentSearchPort`, and `QueryExpansionPort` are separate
-  capabilities. PostgreSQL SQL, `tsquery`, ranking, and mapping-table details stay in infrastructure
-  adapters.
+- PostgreSQL is the source of truth. A generated, weighted `tsvector` plus pgvector support hybrid
+  document retrieval without a second datastore.
+- `all-MiniLM-L6-v2` runs locally through ONNX and returns 384-dimensional embeddings. Its Maven
+  dependencies are downloaded during the build; no external API key is required.
+- CRUD repositories, `ClientSearchPort`, `DocumentSearchPort`, `SemanticDocumentSearchPort`,
+  `EmbeddingPort`, and `QueryExpansionPort` are separate capabilities. PostgreSQL SQL, `tsquery`,
+  vector operators, and mapping-table details stay in infrastructure adapters.
 - Business expansion is explicit and deterministic. PostgreSQL FTS does not pretend that
   `address proof` and `utility bill` are linguistic synonyms.
 - The small `search_term_mapping` table is Flyway-seeded and avoids hard-coding business vocabulary
@@ -209,12 +210,13 @@ Validation and failures use a consistent response shape:
   required by the current cleanup plan.
 - A shared database is appropriate for this implementation. Tenant, RLS, and database-per-client
   models are not introduced. Stronger isolation is a future product and operations trade-off.
-- A dedicated engine such as Lucene or OpenSearch becomes justified when search scale, independent
-  indexing, filters, analyzers, or operational requirements exceed PostgreSQL FTS. It would replace
-  the document-search adapter rather than the application use cases.
+- Raw lexical and cosine scores are combined with rank-based RRF, so results present in both branches
+  are boosted without treating incomparable scores as if they share a scale.
+- A dedicated engine or ANN pgvector index becomes justified when search scale, latency, filters,
+  analyzers, or operational requirements exceed exact PostgreSQL retrieval.
 
 ## Non-goals
 
 Authentication, authorization, Tenant concepts, RLS, binary upload, PDF extraction, OCR, S3,
-asynchronous ingestion, vector search, embeddings, LLM search, and optional summarization are not
-part of this implementation.
+asynchronous ingestion, LLM-generated answers, and optional summarization are not part of this
+implementation.

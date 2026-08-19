@@ -19,6 +19,11 @@ server:
 nevis:
   search:
     max-query-length: ${MAX_QUERY_LENGTH:255}
+    max-results: ${MAX_SEARCH_RESULTS:50}
+    semantic:
+      candidate-limit: ${SEMANTIC_CANDIDATE_LIMIT:50}
+      rrf-k: ${SEMANTIC_RRF_K:60}
+      minimum-similarity: ${SEMANTIC_MINIMUM_SIMILARITY:0.15}
   documents:
     max-content-length: ${MAX_DOCUMENT_CONTENT_LENGTH:1000000}
 
