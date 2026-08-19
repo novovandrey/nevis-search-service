@@ -244,7 +244,7 @@ class NevisPostgresIntegrationTest {
         assertThat(queryExpander.expand(queryNormalizer.normalize(query))).containsExactly(query);
         assertThat(documentSearchPort.search(Set.of(query), 50)).isEmpty();
 
-        List<DocumentSearchResult> semanticResults = semanticDocumentSearchPort.search(embeddingPort.embed(query), 1, 0.15);
+        List<DocumentSearchResult> semanticResults = semanticDocumentSearchPort.search(embeddingPort.embed(query), 1, 0.30);
 
         assertThat(semanticResults).extracting(result -> result.document().id())
                 .containsExactly(electricityStatement.id());
@@ -261,7 +261,7 @@ class NevisPostgresIntegrationTest {
 
         assertThat(documentSearchPort.search(Set.of("passport"), 50))
                 .extracting(result -> result.document().id()).contains(document.id());
-        assertThat(semanticDocumentSearchPort.search(embeddingPort.embed("passport"), 50, 0.15))
+        assertThat(semanticDocumentSearchPort.search(embeddingPort.embed("passport"), 50, 0.30))
                 .extracting(result -> result.document().id()).contains(document.id());
         assertThat(searchService.search("passport").documents())
                 .extracting(result -> result.document().id()).containsOnlyOnce(document.id());

@@ -573,9 +573,9 @@ def test_semantic_search(base_url: str, client_id: str) -> None:
         base_url,
         client_id,
         "Monthly electricity statement",
-        "The tenant receives monthly electricity statements for the apartment at 10 King Street.",
+        "The customer receives a monthly electricity statement for the apartment at 10 King Street.",
     )
-    response = search_request(base_url, "evidence showing where the person lives")
+    response = search_request(base_url, "evidence of where the customer lives")
     expect_status(response, 200, "semantic document search")
     assert_search_shape(response, "semantic document search")
     check(

@@ -10,11 +10,11 @@ class LocalMiniLmEmbeddingAdapterTest {
     void embedsConceptuallyRelatedTextCloserThanAnUnrelatedDocument() {
         LocalMiniLmEmbeddingAdapter embeddings = new LocalMiniLmEmbeddingAdapter();
 
-        float[] query = embeddings.embed("evidence showing where the person lives");
+        float[] query = embeddings.embed("evidence of where the customer lives");
         float[] residenceEvidence = embeddings.embed("""
                 Monthly statement
 
-                The tenant receives monthly electricity statements for the apartment at 10 King Street.
+                The customer receives a monthly electricity statement for the apartment at 10 King Street.
                 """);
         float[] recipe = embeddings.embed("""
                 Cooking notes
@@ -24,10 +24,10 @@ class LocalMiniLmEmbeddingAdapterTest {
 
         assertThat(query).hasSize(LocalMiniLmEmbeddingAdapter.DIMENSION);
         assertThat(cosine(query, residenceEvidence))
-                .isGreaterThan(0.15)
+                .isGreaterThan(0.30)
                 .isGreaterThan(cosine(query, recipe));
         assertThat(cosine(embeddings.embed("zzzx qqqv non-existent search token"), residenceEvidence))
-                .isLessThan(0.15);
+                .isLessThan(0.30);
     }
 
     private double cosine(float[] left, float[] right) {

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HybridDocumentSearchMergerTest {
 
     private final HybridDocumentSearchMerger merger = new HybridDocumentSearchMerger(
-            new SemanticSearchProperties(50, 60, 0.15), new SearchProperties(255, 50)
+            new SemanticSearchProperties(50, 60, 0.30), new SearchProperties(255, 50)
     );
 
     @Test

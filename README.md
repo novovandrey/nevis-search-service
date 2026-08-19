@@ -189,7 +189,7 @@ Validation and failures use a consistent response shape:
 | `MAX_SEARCH_RESULTS` | `50` | Maximum merged document results |
 | `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum candidates from each retrieval branch |
 | `SEMANTIC_RRF_K` | `60` | Reciprocal Rank Fusion constant |
-| `SEMANTIC_MINIMUM_SIMILARITY` | `0.15` | Minimum cosine similarity for semantic candidates |
+| `SEMANTIC_MINIMUM_SIMILARITY` | `0.30` | Minimum cosine similarity for semantic candidates |
 | `MAX_DOCUMENT_CONTENT_LENGTH` | `1000000` | Maximum document content length |
 
 ## Architecture decisions

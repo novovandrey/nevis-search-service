@@ -26,7 +26,7 @@ class SearchServiceTest {
     @Test
     void orchestratesLexicalAndSemanticDocumentSearch() {
         SearchProperties properties = new SearchProperties(255, 50);
-        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(50, 60, 0.15);
+        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(50, 60, 0.30);
         QueryNormalizer normalizer = new QueryNormalizer(properties);
         ClientSearchQueryNormalizer clientNormalizer = new ClientSearchQueryNormalizer(properties);
         QueryExpander expander = new QueryExpander(query -> Set.of("utility bill"));
