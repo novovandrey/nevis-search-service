@@ -269,7 +269,7 @@ class NevisPostgresIntegrationTest {
                                'Client ' || value,
                                'bulk-' || value || '@unrelated-company-' || value || '.example',
                                NULL
-                        FROM generate_series(1, 10000) AS value
+                        FROM generate_series(1, 100000) AS value
                         """).update();
         jdbcClient.sql("ANALYZE clients").update();
 
