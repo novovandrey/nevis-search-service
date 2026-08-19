@@ -16,10 +16,14 @@ import java.util.UUID;
 public class HybridDocumentSearchMerger {
 
     private final int rrfK;
+    private final double lexicalWeight;
+    private final double vectorWeight;
     private final int maxResults;
 
     public HybridDocumentSearchMerger(SemanticSearchProperties semanticProperties, SearchProperties searchProperties) {
         this.rrfK = semanticProperties.rrfK();
+        this.lexicalWeight = semanticProperties.lexicalWeight();
+        this.vectorWeight = semanticProperties.vectorWeight();
         this.maxResults = searchProperties.maxResults();
     }
 
@@ -28,8 +32,8 @@ public class HybridDocumentSearchMerger {
             List<DocumentSearchResult> semanticResults
     ) {
         Map<UUID, MergedDocument> merged = new LinkedHashMap<>();
-        addRankContributions(merged, lexicalResults);
-        addRankContributions(merged, semanticResults);
+        addRankContributions(merged, lexicalResults, lexicalWeight);
+        addRankContributions(merged, semanticResults, vectorWeight);
 
         return merged.values().stream()
                 .sorted(Comparator
@@ -43,11 +47,12 @@ public class HybridDocumentSearchMerger {
 
     private void addRankContributions(
             Map<UUID, MergedDocument> merged,
-            List<DocumentSearchResult> rankedResults
+            List<DocumentSearchResult> rankedResults,
+            double weight
     ) {
         for (int index = 0; index < rankedResults.size(); index++) {
             Document document = rankedResults.get(index).document();
-            double contribution = 1.0d / (rrfK + index + 1);
+            double contribution = weight / (rrfK + index + 1);
             merged.merge(document.id(), new MergedDocument(document, contribution),
                     (current, ignored) -> new MergedDocument(current.document(), current.score() + contribution));
         }

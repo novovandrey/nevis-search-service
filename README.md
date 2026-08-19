@@ -157,7 +157,7 @@ client returns `404`; invalid input returns `400`.
 
 Searches clients by company derived from their email domain and documents across all clients.
 Document results combine PostgreSQL FTS, deterministic business-term expansion, and local semantic
-embeddings with Reciprocal Rank Fusion. Client lookup does not search first name, last name, or
+embeddings with weighted Reciprocal Rank Fusion. Client lookup does not search first name, last name, or
 full email. Results have a `type` discriminator (`CLIENT` or `DOCUMENT`); embeddings and internal
 scores are never exposed. `content` is populated only for `DOCUMENT` results and contains the
 complete stored document text without truncation, snippets, or highlighting.
@@ -190,6 +190,8 @@ Validation and failures use a consistent response shape:
 | `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum candidates from each retrieval branch |
 | `SEMANTIC_RRF_K` | `60` | Reciprocal Rank Fusion constant |
 | `SEMANTIC_MINIMUM_SIMILARITY` | `0.30` | Minimum cosine similarity for semantic candidates |
+| `SEMANTIC_LEXICAL_WEIGHT` | `1.25` | Weighted RRF contribution from the lexical ranking |
+| `SEMANTIC_VECTOR_WEIGHT` | `1.0` | Weighted RRF contribution from the semantic ranking |
 | `MAX_DOCUMENT_CONTENT_LENGTH` | `1000000` | Maximum document content length |
 
 ## Architecture decisions
@@ -210,8 +212,14 @@ Validation and failures use a consistent response shape:
   required by the current cleanup plan.
 - A shared database is appropriate for this implementation. Tenant, RLS, and database-per-client
   models are not introduced. Stronger isolation is a future product and operations trade-off.
-- Raw lexical and cosine scores are combined with rank-based RRF, so results present in both branches
-  are boosted without treating incomparable scores as if they share a scale.
+- Raw lexical and cosine scores are not added directly. Weighted rank-based RRF gives the lexical
+  ranking a calibrated `1.25:1.0` preference while still boosting results present in both branches.
+- Calibration against the real MiniLM model and PostgreSQL used twelve representative queries and
+  exact long-title boundary fixtures. Threshold `0.45` improved precision but was rejected because
+  a required semantic-only match measured only `0.314602`; the calibrated global threshold therefore
+  remains `0.30`. For `address`, the synthetic boundary measured cosine `0.491570`, while the literal
+  `Manual Browser Utility Bill` measured `0.360140`; lexical weight `1.25` keeps literal evidence above
+  a semantic-only candidate without sacrificing the measured semantic recall.
 - A dedicated engine or ANN pgvector index becomes justified when search scale, latency, filters,
   analyzers, or operational requirements exceed exact PostgreSQL retrieval.
 

@@ -268,6 +268,41 @@ class NevisPostgresIntegrationTest {
     }
 
     @Test
+    void weightedRrfRanksLiteralAddressMatchesAboveNewerBoundaryDocuments() {
+        Client client = clientService.create("Ranking", "Tester", "ranking@example.com", null);
+        Document manualAddress = documentService.create(
+                client.id(),
+                "Manual Browser Utility Bill",
+                "Electricity statement for the current residential address"
+        );
+        Document literalAddress = documentService.create(
+                client.id(),
+                "Residential Address Confirmation",
+                "The customer's residential address has been verified."
+        );
+        String token = "29ba551f1734";
+        String boundaryPrefix = "T" + token;
+        Document boundary = documentService.create(
+                client.id(),
+                boundaryPrefix + "x".repeat(254 - boundaryPrefix.length()),
+                "Title boundary 254 " + token
+        );
+        Document unrelated = documentService.create(
+                client.id(),
+                "Cooking Notes",
+                "The recipe uses olive oil, tomatoes, basil and pasta for dinner."
+        );
+
+        List<DocumentSearchResult> results = searchService.search("address").documents();
+
+        assertThat(results).extracting(result -> result.document().id())
+                .contains(literalAddress.id(), manualAddress.id(), boundary.id())
+                .doesNotContain(unrelated.id());
+        assertThat(rankOf(results, literalAddress)).isLessThan(rankOf(results, boundary));
+        assertThat(rankOf(results, manualAddress)).isLessThan(rankOf(results, boundary));
+    }
+
+    @Test
     void apiKeepsSearchQueryAndDocumentTitleLimitsConsistent() throws Exception {
         Client client = clientService.create("Length", "Tester", "length@example.com", null);
         String title = "a".repeat(255);
@@ -291,6 +326,15 @@ class NevisPostgresIntegrationTest {
         mockMvc.perform(get("/search").param("q", "a".repeat(256)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Search query must not exceed 255 characters"));
+    }
+
+    private int rankOf(List<DocumentSearchResult> results, Document document) {
+        for (int index = 0; index < results.size(); index++) {
+            if (results.get(index).document().id().equals(document.id())) {
+                return index + 1;
+            }
+        }
+        return -1;
     }
 
     @Test

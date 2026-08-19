@@ -12,7 +12,7 @@ normalized query
  ├─ PostgreSQL FTS + explicit search_term_mapping expansion
  └─ local embedding + pgvector cosine similarity
                  ↓
-        Reciprocal Rank Fusion (RRF)
+       Weighted Reciprocal Rank Fusion
 ```
 
 - FTS handles exact terms, stemming and deterministic title/content weighting.
@@ -56,17 +56,28 @@ ANN index yet; HNSW/IVFFlat becomes appropriate only after dataset size and late
 justify its operational cost.
 
 Both retrievers are bounded by `nevis.search.semantic.candidate-limit`. Semantic candidates must
-also meet `minimum-similarity`. Raw FTS and cosine scores are never added directly. Instead RRF
-combines ranks:
+also meet `minimum-similarity`. Raw FTS and cosine scores are never added directly. Weighted RRF
+combines ranks while giving literal lexical matches a modest calibrated preference:
 
 ```text
-score(document) = Σ 1 / (rrf-k + rank)
+score(document) = lexical-weight / (rrf-k + lexical-rank)
+                + vector-weight  / (rrf-k + vector-rank)
 ```
 
-The same document in both lists receives both contributions and is emitted once. Ties are ordered
-by creation time and UUID, and the final document list is bounded by `nevis.search.max-results`.
+Missing branches contribute zero. The calibrated defaults are `minimum-similarity=0.30`,
+`lexical-weight=1.25`, `vector-weight=1.0`, and `rrf-k=60`. The same document in both lists receives
+both contributions and is emitted once. Remaining ties are ordered by creation time and UUID, and
+the final document list is bounded by `nevis.search.max-results`.
 If embedding/query vector retrieval fails during search, the service logs the failure and still
 returns lexical results.
+
+The calibration test uses the real PostgreSQL adapters and packaged MiniLM model. It sweeps the
+configured grid across twelve address, identity, investment and tax queries. A threshold of `0.45`
+improved precision but excluded an established semantic-only positive whose cosine was `0.314602`,
+so `0.30` remains the recall-preserving global threshold. A real long-title boundary fixture scored
+`0.491570` for `address`, above the literal utility bill's semantic score of `0.360140`; lexical
+weight `1.25` resolves the case using lexical evidence instead of creation time. One global
+threshold passed the short-query checks, so no query-length-specific rule is used.
 
 ## Runtime and tests
 

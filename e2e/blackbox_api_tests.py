@@ -366,7 +366,7 @@ def test_client_contract(base_url: str, token: str) -> tuple[str, dict[str, Any]
     return client_id, client_response
 
 
-def test_document_contract(base_url: str, client_id: str, token: str) -> tuple[str, str, str]:
+def test_document_contract(base_url: str, client_id: str, token: str) -> tuple[str, str, str, str]:
     document_content = (
         f"Utility bill reference {token}. "
         "Electricity account statement for the customer residence."
@@ -382,6 +382,13 @@ def test_document_contract(base_url: str, client_id: str, token: str) -> tuple[s
     check(str(normal_response["client_id"]) == client_id, "document client_id mismatch")
     check(normal_response["content"] == document_content, "document content mismatch")
     print(f"PASS document happy path and response contract: {normal_id}")
+
+    address_id, _ = create_document(
+        base_url,
+        client_id,
+        "Manual Browser Utility Bill",
+        "Electricity statement for the current residential address",
+    )
 
     for field in ("title", "content"):
         payload = {"title": f"Missing {token}", "content": "abc"}
@@ -472,12 +479,13 @@ def test_document_contract(base_url: str, client_id: str, token: str) -> tuple[s
         415,
     )
     print("PASS malformed document JSON and unsupported content type return 4xx")
-    return normal_id, max_id, document_content
+    return normal_id, address_id, max_id, document_content
 
 
 def test_search_contract(
     base_url: str,
     client_id: str,
+    address_document_id: str,
     max_document_id: str,
     max_title: str,
     document_content: str,
@@ -507,6 +515,29 @@ def test_search_contract(
     assert_search_shape(response, "full title search")
     check(contains_entity_with_id(response.body, max_document_id), f"full title search did not return {max_document_id}: {response.raw}")
     print("PASS 255-character title is searchable with complete q")
+
+    response = search_request(base_url, "address")
+    expect_status(response, 200, "weighted hybrid ranking")
+    entities = assert_search_shape(response, "weighted hybrid ranking")
+    address_rank = next(
+        (index for index, item in enumerate(entities) if str(item.get("id")) == address_document_id),
+        None,
+    )
+    boundary_rank = next(
+        (
+            index
+            for index, item in enumerate(entities)
+            if item.get("type") == "DOCUMENT"
+            and str(item.get("content", "")).startswith("Title boundary 254")
+        ),
+        None,
+    )
+    check(address_rank is not None, f"literal address document is missing: {response.raw}")
+    check(
+        boundary_rank is None or address_rank < boundary_rank,
+        f"semantic-only boundary document outranked literal address match: {response.raw}",
+    )
+    print("PASS weighted RRF ranks literal address match above boundary document")
 
     response = search_request(base_url, "Nevis Wealth")
     expect_status(response, 200, "company-domain search")
@@ -595,12 +626,22 @@ def run(base_url: str) -> None:
     print("PASS service becomes reachable")
 
     client_id, _ = test_client_contract(base_url, token)
-    normal_document_id, max_document_id, document_content = test_document_contract(base_url, client_id, token)
+    normal_document_id, address_document_id, max_document_id, document_content = test_document_contract(
+        base_url, client_id, token
+    )
     check(normal_document_id != max_document_id, "document fixtures unexpectedly share an id")
 
     max_title_prefix = f"Household Statement {token} "
     max_title = max_title_prefix + string_of_length(TITLE_MAX - len(max_title_prefix), "a")
-    test_search_contract(base_url, client_id, max_document_id, max_title, document_content, token)
+    test_search_contract(
+        base_url,
+        client_id,
+        address_document_id,
+        max_document_id,
+        max_title,
+        document_content,
+        token,
+    )
     test_semantic_search(base_url, client_id)
     test_http_robustness(base_url, client_id)
 

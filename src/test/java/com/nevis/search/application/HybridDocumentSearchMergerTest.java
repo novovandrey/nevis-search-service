@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HybridDocumentSearchMergerTest {
 
     private final HybridDocumentSearchMerger merger = new HybridDocumentSearchMerger(
-            new SemanticSearchProperties(50, 60, 0.30), new SearchProperties(255, 50)
+            new SemanticSearchProperties(50, 60, 0.30, 1.25, 1.0), new SearchProperties(255, 50)
     );
 
     @Test
@@ -34,8 +34,27 @@ class HybridDocumentSearchMergerTest {
         );
 
         assertThat(merged).extracting(result -> result.document().id())
-                .containsExactly(inBoth.id(), semanticOnly.id(), lexicalOnly.id());
+                .containsExactly(inBoth.id(), lexicalOnly.id(), semanticOnly.id());
         assertThat(merged).hasSize(3);
+        assertThat(merged.getFirst().relevance())
+                .isEqualTo(1.25 / 62 + 1.0 / 62);
+    }
+
+    @Test
+    void lexicalWeightPreventsNewerSemanticOnlyResultFromWinningAnRrfTie() {
+        Instant now = Instant.parse("2026-08-19T12:00:00Z");
+        Document lexical = document("00000000-0000-0000-0000-000000000011", now);
+        Document newerSemantic = document("00000000-0000-0000-0000-000000000012", now.plusSeconds(60));
+
+        List<DocumentSearchResult> merged = merger.merge(
+                List.of(new DocumentSearchResult(lexical, 0.9)),
+                List.of(new DocumentSearchResult(newerSemantic, 0.49))
+        );
+
+        assertThat(merged).extracting(result -> result.document().id())
+                .containsExactly(lexical.id(), newerSemantic.id());
+        assertThat(merged.getFirst().relevance()).isEqualTo(1.25 / 61);
+        assertThat(merged.getLast().relevance()).isEqualTo(1.0 / 61);
     }
 
     private Document document(String id, Instant createdAt) {

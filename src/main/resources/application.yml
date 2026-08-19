@@ -24,6 +24,8 @@ nevis:
       candidate-limit: ${SEMANTIC_CANDIDATE_LIMIT:50}
       rrf-k: ${SEMANTIC_RRF_K:60}
       minimum-similarity: ${SEMANTIC_MINIMUM_SIMILARITY:0.30}
+      lexical-weight: ${SEMANTIC_LEXICAL_WEIGHT:1.25}
+      vector-weight: ${SEMANTIC_VECTOR_WEIGHT:1.0}
   documents:
     max-content-length: ${MAX_DOCUMENT_CONTENT_LENGTH:1000000}
 
