@@ -1,106 +1,124 @@
-# Nevis Home Task — Requirements Audit Report
+# Nevis Search Service — Final Deliverables Audit Report
 
-> Audit date: 2026-08-18
->
+> Audit date: 2026-08-19
+> Audited application revision: `b5bc5fd`
 > Source checklist: [`REQUIREMENTS_AUDIT.md`](REQUIREMENTS_AUDIT.md)
->
-> Scope: existing implementation plus the smallest fixes needed for the mandatory contract
 
 ## Outcome
 
-The code, schema, tests, generated OpenAPI contract, and documentation satisfy the mandatory
-requirements. The optional document-summary feature remains intentionally unimplemented.
-
-The audit found four contract/documentation gaps:
-
-1. client name fields and document metadata were serialized in camelCase instead of the supplied
-   wire names `first_name`, `last_name`, `client_id`, and `created_at`;
-2. generated OpenAPI did not declare the actual success and error status codes;
-3. the README did not include response bodies for both creation calls or a complete global
-   `address proof` to `utility bill` example;
-4. an unsupported request media type was caught by the generic exception handler and incorrectly
-   returned `500` instead of `415`.
-
-The fixes are limited to Jackson/OpenAPI annotations, contract assertions, and documentation.
-Application services, ports/adapters, PostgreSQL search behavior, and the database schema were not
-redesigned. Legacy `firstName` and `lastName` request fields remain accepted as aliases, while the
-documented canonical contract is snake_case.
-
-## Code and test evidence
-
-- Client creation: `ClientController.create`, `ClientService.create`, and
-  `PostgresClientRepository.save`.
-- Document creation and ownership: `DocumentController.create`, `DocumentService.create`, and
-  `PostgresDocumentRepository.save`.
-- Mandatory global search: `SearchController.search` and `SearchService.search`.
-- Replaceable search boundaries: `ClientSearchPort`, `DocumentSearchPort`, and
-  `QueryExpansionPort`, implemented by adapters under `infrastructure.postgres`.
-- PostgreSQL schema and reproducible related terms:
-  `src/main/resources/db/migration/V1__initial_schema.sql`.
-- Real-database and API behavior: `NevisPostgresIntegrationTest`, especially
-  `migrationsCreateGeneratedSearchVectorAndForeignKey`,
-  `clientSearchMatchesOnlyNormalizedCompanyDomainAndIgnoresUnexpectedEmails`,
-  `businessTermsUseOrSemanticsAndClientScopeNeverLeaksDocuments`,
-  `fullTextSearchUsesStemmingRankingAndDeterministicNoResultBehavior`,
-  `apiCoversCreationValidationUnknownClientScopedAndGlobalSearch`, and
-  `openApiDocumentsJsonContractAndActualResponseStatuses`.
-- Focused application tests: `ClientSearchQueryNormalizerTest`, `QueryNormalizerTest`,
-  `QueryExpanderTest`, `DocumentServiceTest`, and `SearchServiceTest`.
-
-## Automated verification
-
-Executed on the Ubuntu mini PC with Java 25, Docker 29.7.2, PostgreSQL 17.6 Testcontainers, and an
-empty test schema:
+All mandatory deliverables are complete and verified against the Dockerized service on the mini-PC.
+The implementation exposes only the required public endpoints:
 
 ```text
-mvn verify
-Tests run: 17, Failures: 0, Errors: 0, Skipped: 0
+POST /clients
+POST /clients/{id}/documents
+GET  /search?q=...
+```
+
+Swagger UI and the generated OpenAPI document are the API-documentation deliverable. No static
+OpenAPI copy is required.
+
+## Source and Reproducibility
+
+The tracked repository includes:
+
+- Java 25 / Spring Boot source code and PostgreSQL adapters;
+- Flyway migration `V1__initial_schema.sql` for schema and related-term seed data;
+- `Dockerfile` and `compose.yaml`;
+- Maven unit/integration tests and the standard-library Python black-box suite;
+- `README.md`, architecture documentation, and generated OpenAPI configuration.
+
+The resolved `nevis-smoke` Compose configuration publishes the application as:
+
+```text
+host 8080 -> container 8080/tcp
+```
+
+The final audit used the existing Compose project without deleting data:
+
+```bash
+docker compose -p nevis-smoke up -d --build --wait
+```
+
+`nevis-smoke-app-1` was running and healthy; `nevis-smoke-postgres-1` was running and healthy.
+The persisted `nevis-smoke_postgres-data` volume remained present.
+
+## Automated Verification
+
+Executed on the Ubuntu mini-PC with Java 25, Docker 29.7.2, PostgreSQL 17.6 Testcontainers, and
+the deployed Compose service:
+
+```text
+mvn -B test
+Tests run: 19, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-The 17 tests consist of 11 focused unit tests and 6 PostgreSQL/API integration tests. Flyway
-validated and applied `V1__initial_schema.sql` to an empty PostgreSQL schema during the run.
+The suite includes 11 focused application/DTO tests and 8 PostgreSQL/API integration tests. The
+integration suite created a fresh Testcontainers PostgreSQL database, validated Flyway, and applied
+`V1__initial_schema.sql`.
 
-## Docker Compose and end-to-end evidence
-
-The old smoke stack and its PostgreSQL volume were removed first. The final image and empty
-database were then created with:
+The public HTTP black-box suite was compiled and run twice against the same non-empty database:
 
 ```text
-APP_HOST_PORT=8080 docker compose -p nevis-smoke up -d --build --wait
+python -m py_compile e2e/blackbox_api_tests.py
+python e2e/blackbox_api_tests.py --base-url http://192.168.1.87:8080
+python e2e/blackbox_api_tests.py --base-url http://192.168.1.87:8080
 ```
 
-Both `nevis-smoke-app-1` and `nevis-smoke-postgres-1` became healthy. Flyway created the empty
-schema at version V1, the application listened on container port `8080`, and Compose published it
-as 8080`.
+Both runs completed with `ALL BLACK-BOX ACCEPTANCE TESTS PASSED`. They cover client and document
+creation, required/null/blank/type validation, length boundaries, invalid IDs, malformed JSON,
+unsupported media types, query boundaries, search normalization, company-domain client search,
+synonym expansion, complete document content, mixed result types, Unicode/punctuation robustness,
+and repeatability.
 
-Observed final HTTP results against the clean stack:
+## Live API Documentation Check
+
+The deployed service returned:
 
 ```text
-POST /clients                                      201; canonical snake_case response
-POST /clients/{id}/documents                       201; correct client_id and created_at
-GET  /search?q=Nevis%20Wealth                       200; Anton/client returned
-GET  /search?q=address%20proof                      200; May Utility Bill/document returned
-GET  /v3/api-docs                                   200
-POST /clients with application/octet-stream         415; consistent ApiError response
+GET /v3/api-docs     200
+GET /swagger-ui.html 200
+openapi              3.1.0
+info.title           API
+info.version         1.0.0
 ```
 
-## Final compliance table
+The OpenAPI contract declares `POST /clients`, `POST /clients/{id}/documents`, and `GET /search`.
+It documents document-search `content` as a string, matching the live response behavior.
+
+## README Validation
+
+`README.md` provides Docker Compose setup instructions, Maven test instructions, and complete
+examples for client creation, document creation, `Nevis Wealth` client discovery, and `address
+proof` finding a document containing `utility bill`. The black-box verification exercises the same
+public workflow and confirms the documented behavior.
+
+## Final Compliance Table
 
 | Requirement | Status | Evidence | Fix made |
 |---|---|---|---|
-| POST /clients | PASS | `ClientController.create`; `ClientService.create`; `PostgresClientRepository.save`; `apiCoversCreationValidationUnknownClientScopedAndGlobalSearch` | canonical `first_name`/`last_name` JSON contract added with compatibility aliases |
-| POST /clients/{id}/documents | PASS | `DocumentController.create`; `DocumentService.create`; `PostgresDocumentRepository.save`; API integration test | canonical `client_id`/`created_at` response fields and assertions added |
-| GET /search?q= | PASS | `SearchController.search`; `SearchService.search`; API integration test covers required, blank, matching, and empty queries | missing-`q` assertion added |
-| Company search via corporate email | PASS | `PostgresClientSearchAdapter`; `ClientSearchQueryNormalizerTest`; `clientSearchMatchesOnlyNormalizedCompanyDomainAndIgnoresUnexpectedEmails`; API E2E assertion | none |
-| Similar-term document search | PASS | `QueryExpander`; `PostgresQueryExpansionAdapter`; `PostgresDocumentSearchAdapter`; mapping/isolation and API E2E tests | strengthened global API assertion for `Utility Bill` |
-| REST/HTTP codes | PASS | controllers; `ApiExceptionHandler`; API integration test | actual `200`/`201`/`400`/`404`/`415`/`500` responses documented in OpenAPI; unsupported media now returns `415` |
-| PostgreSQL persistence | PASS | PostgreSQL JDBC adapters; Flyway V1; migration integration test | none |
-| PostgreSQL FTS | PASS | generated weighted `search_vector`, GIN index, `PostgresDocumentSearchAdapter`; stemming/ranking integration test | none |
-| Tests for core logic and edge cases | PASS | 17 tests: 11 unit and 6 PostgreSQL/API integration; `mvn verify` succeeds | JSON-contract and generated-OpenAPI integration coverage added |
-| Docker Compose | PASS | clean image, network, PostgreSQL volume, Flyway migration, healthy containers, and E2E smoke on mini PC | added configurable host-port override while preserving the required default |
-| Port 8080 | PASS | application verified listening on container `8080`; `compose.yaml` defaults host mapping to `8080`; `${APP_HOST_PORT:-8080}:8080` supports the occupied mini-PC host without changing the default contract |
-| README setup instructions | PASS | `README.md` — Run locally, Tests, Configuration | none |
-| README examples | PASS | `README.md` — Example workflow | added creation responses and complete related-term global-search example; aligned JSON names |
-| API documentation | PASS | Swagger UI `/swagger-ui.html`; OpenAPI `/v3/api-docs`; `openApiDocumentsJsonContractAndActualResponseStatuses` | response codes/schemas explicitly annotated and tested |
-| Optional summary | OPTIONAL | N/A; explicitly listed as a non-goal | none |
+| Source code in a repository | PASS | tracked Java source, Flyway migration, Docker assets, tests, README, and docs on `main` | none |
+| `POST /clients` | PASS | controller, integration tests, and two black-box runs | canonical JSON contract and strict string handling verified |
+| `POST /clients/{id}/documents` | PASS | controller, integration tests, and two black-box runs | document content returned and boundary/error cases verified |
+| `GET /search?q=...` | PASS | controller, PostgreSQL integration tests, and two black-box runs | 255-character query/title consistency and synonym behavior verified |
+| PostgreSQL persistence and FTS | PASS | Flyway V1, PostgreSQL adapters, Testcontainers integration tests | none |
+| Tests for core logic and edge cases | PASS | `mvn -B test`: 19/19; Python black-box suite passed twice | expanded public edge-case coverage |
+| Docker Compose reproducibility | PASS | `docker compose -p nevis-smoke up -d --build --wait`; healthy app and PostgreSQL | none |
+| Service exposed on port `8080` | PASS | resolved Compose mapping `8080 -> 8080/tcp`; live API checks | fixed standard mapping documented |
+| README setup instructions | PASS | `README.md` Run locally, Tests, Configuration sections | none |
+| README search examples and responses | PASS | `README.md` Example workflow; black-box search verification | complete document content example verified |
+| API documentation | PASS | Swagger UI `/swagger-ui.html`, OpenAPI `/v3/api-docs`, integration contract assertions | generated OpenAPI reflects the live API |
+| Optional summary | OPTIONAL | intentionally out of scope | none |
+
+## Completion
+
+Every mandatory requirement is `PASS`. The two task-defining acceptance scenarios were verified
+end-to-end:
+
+```text
+Nevis Wealth  -> client with neviswealth.com corporate domain
+address proof -> DOCUMENT containing utility bill and its original stored content
+```
+
+No endpoint, ranking, schema, or migration change was needed for this final deliverables audit.
