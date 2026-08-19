@@ -103,6 +103,27 @@ class NevisPostgresIntegrationTest {
 
     @Test
     void migrationsCreateGeneratedSearchVectorAndForeignKey() {
+        assertThat(jdbcClient.sql("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')")
+                .query(Boolean.class)
+                .single())
+                .isTrue();
+        assertThat(jdbcClient.sql("""
+                        SELECT attgenerated
+                        FROM pg_attribute
+                        WHERE attrelid = 'clients'::regclass AND attname = 'company_search_key'
+                        """)
+                .query(String.class)
+                .single())
+                .isEqualTo("s");
+        assertThat(jdbcClient.sql("""
+                        SELECT indexname
+                        FROM pg_indexes
+                        WHERE schemaname = 'public' AND tablename = 'clients'
+                        ORDER BY indexname
+                        """)
+                .query(String.class)
+                .list())
+                .contains("clients_company_search_key_exact_idx", "clients_company_search_key_trgm_idx");
         List<String> mappingColumns = jdbcClient.sql("""
                         SELECT column_name
                         FROM information_schema.columns
@@ -165,29 +186,107 @@ class NevisPostgresIntegrationTest {
     }
 
     @Test
-    void clientSearchMatchesOnlyNormalizedCompanyDomainAndIgnoresUnexpectedEmails() {
-        Client nevis = clientService.create(
-                "Anton", "Batiaev", "anton.batiaev@neviswealth.com", "UK"
+    void clientSearchUsesExactAndFuzzyCompanyKeysWithoutLocalPartOrSubstringMatches() {
+        Client exact = clientService.create(
+                "Exact", "Hewlett", "exact@hewlettpackard.com", "UK"
         );
-        clientService.create("Other", "Person", "other@example.com", null);
-        clientService.create("Near", "Match", "near@myneviswealth.com", null);
+        Client fuzzyExtraCharacter = clientService.create(
+                "Fuzzy", "Extra", "user@hewlettpackarrd.io", null
+        );
+        Client fuzzyMissingCharacter = clientService.create(
+                "Fuzzy", "Missing", "user@hewlettpackerd.io", null
+        );
+        Client microsoft = clientService.create("Microsoft", "Person", "other@microsoft.com", null);
+        Client localPart = clientService.create("Local", "Part", "hewlettpackard.employee@gmail.com", null);
+        clientService.create("Near", "Match", "near@myhewlettpackard.com", null);
         jdbcClient.sql("""
                         INSERT INTO clients (id, first_name, last_name, email, country_of_residence)
                         VALUES (:id, 'Malformed', 'Email', 'unexpected-email-value', NULL)
                         """)
                 .param("id", UUID.randomUUID())
                 .update();
+        Client subdomain = clientService.create(
+                "Subdomain", "Example", "user@sub.hewlettpackard.co.uk", null
+        );
 
-        for (String query : List.of("Nevis Wealth", "nevis wealth", "NEVIS WEALTH", "neviswealth")) {
+        assertThat(jdbcClient.sql("SELECT company_search_key FROM clients WHERE id = :id")
+                .param("id", exact.id())
+                .query(String.class)
+                .single())
+                .isEqualTo("hewlettpackard");
+        assertThat(jdbcClient.sql("SELECT company_search_key FROM clients WHERE id = :id")
+                .param("id", subdomain.id())
+                .query(String.class)
+                .single())
+                .isEqualTo("sub.hewlettpackard.co");
+
+        for (String query : List.of("Hewlett Packard", "hewlett packard", "HEWLETT PACKARD", "hewlettpackard")) {
             assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize(query)))
                     .extracting(result -> result.client().id())
-                    .containsExactly(nevis.id());
+                    .contains(exact.id(), fuzzyExtraCharacter.id(), fuzzyMissingCharacter.id())
+                    .doesNotContain(microsoft.id(), localPart.id());
         }
-        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Other Company"))).isEmpty();
+
+        List<UUID> fuzzyIds = clientSearchPort.search(clientSearchQueryNormalizer.normalize("Hewlett Packard"))
+                .stream()
+                .map(result -> result.client().id())
+                .toList();
+        float extraSimilarity = jdbcClient.sql("SELECT similarity('hewlettpackarrd', 'hewlettpackard')")
+                .query(Float.class)
+                .single();
+        float missingSimilarity = jdbcClient.sql("SELECT similarity('hewlettpackerd', 'hewlettpackard')")
+                .query(Float.class)
+                .single();
+        assertThat(fuzzyIds.getFirst()).isEqualTo(exact.id());
+        assertThat(fuzzyIds).contains(fuzzyExtraCharacter.id(), fuzzyMissingCharacter.id());
+        if (extraSimilarity > missingSimilarity) {
+            assertThat(fuzzyIds.indexOf(fuzzyExtraCharacter.id()))
+                    .isLessThan(fuzzyIds.indexOf(fuzzyMissingCharacter.id()));
+        } else {
+            assertThat(fuzzyIds.indexOf(fuzzyMissingCharacter.id()))
+                    .isLessThan(fuzzyIds.indexOf(fuzzyExtraCharacter.id()));
+        }
+
+        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Hewlett"))).isEmpty();
         assertThat(clientSearchPort.search(
-                clientSearchQueryNormalizer.normalize("ANTON.BATIAEV@NEVISWEALTH.COM")
+                clientSearchQueryNormalizer.normalize("hewlettpackard.employee@gmail.com")
         )).isEmpty();
-        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Batiaev"))).isEmpty();
+        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("Hewlett' OR '1'='1"))).isEmpty();
+        assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("he"))).isEmpty();
+    }
+
+    @Test
+    void trigramSearchPlanUsesTheGinIndexAfterAnalyze() {
+        clientService.create("Fuzzy", "Plan", "user@hewlettpackarrd.io", null);
+        jdbcClient.sql("""
+                        INSERT INTO clients (id, first_name, last_name, email, country_of_residence)
+                        SELECT (substr(md5('trigram-client-' || value::text), 1, 8) || '-' ||
+                                substr(md5('trigram-client-' || value::text), 9, 4) || '-' ||
+                                substr(md5('trigram-client-' || value::text), 13, 4) || '-' ||
+                                substr(md5('trigram-client-' || value::text), 17, 4) || '-' ||
+                                substr(md5('trigram-client-' || value::text), 21, 12))::uuid,
+                               'Bulk',
+                               'Client ' || value,
+                               'bulk-' || value || '@unrelated-company-' || value || '.example',
+                               NULL
+                        FROM generate_series(1, 10000) AS value
+                        """).update();
+        jdbcClient.sql("ANALYZE clients").update();
+
+        String plan = String.join("\n", jdbcClient.sql("""
+                        EXPLAIN (ANALYZE, COSTS OFF)
+                        SELECT id
+                        FROM clients
+                        WHERE company_search_key % 'hewlettpackard'
+                          AND company_search_key <> 'hewlettpackard'
+                          AND company_search_key NOT LIKE '%hewlettpackard%'
+                          AND 'hewlettpackard' NOT LIKE '%' || company_search_key || '%'
+                          AND similarity(company_search_key, 'hewlettpackard') >= 0.50
+                        """)
+                .query(String.class)
+                .list());
+
+        assertThat(plan).contains("clients_company_search_key_trgm_idx");
     }
 
     @Test

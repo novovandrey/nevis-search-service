@@ -20,6 +20,8 @@ nevis:
   search:
     max-query-length: ${MAX_QUERY_LENGTH:255}
     max-results: ${MAX_SEARCH_RESULTS:50}
+    client:
+      trigram-threshold: ${CLIENT_TRIGRAM_SIMILARITY_THRESHOLD:0.50}
     semantic:
       candidate-limit: ${SEMANTIC_CANDIDATE_LIMIT:50}
       rrf-k: ${SEMANTIC_RRF_K:60}

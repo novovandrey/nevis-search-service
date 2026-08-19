@@ -587,6 +587,40 @@ def test_search_contract(
     print("PASS no-result search returns HTTP 200 and an empty array")
 
 
+def test_fuzzy_company_search(base_url: str, token: str) -> None:
+    exact_id, _ = create_client(
+        base_url,
+        token,
+        {
+            "first_name": "Hewlett",
+            "last_name": "Exact",
+            "email": f"exact-{token}@hewlettpackard.com",
+            "countryOfResidence": "UK",
+        },
+    )
+    fuzzy_id, _ = create_client(
+        base_url,
+        token,
+        {
+            "first_name": "Hewlett",
+            "last_name": "Typo",
+            "email": f"typo-{token}@hewlettpackarrd.io",
+            "countryOfResidence": "UK",
+        },
+    )
+
+    response = search_request(base_url, "Hewlett Packard")
+    expect_status(response, 200, "fuzzy company-domain search")
+    entities = assert_search_shape(response, "fuzzy company-domain search")
+    clients = [item for item in entities if item.get("type") == "CLIENT"]
+    exact_index = next((index for index, item in enumerate(clients) if str(item.get("id")) == exact_id), None)
+    fuzzy_index = next((index for index, item in enumerate(clients) if str(item.get("id")) == fuzzy_id), None)
+    check(exact_index is not None, f"exact Hewlett Packard client is missing: {response.raw}")
+    check(fuzzy_index is not None, f"typo-tolerant Hewlett Packard client is missing: {response.raw}")
+    check(exact_index < fuzzy_index, f"exact company match did not rank above fuzzy match: {response.raw}")
+    print("PASS pg_trgm company search finds typo and keeps exact result first")
+
+
 def test_http_robustness(base_url: str, client_id: str) -> None:
     response = request(
         base_url,
@@ -642,6 +676,7 @@ def run(base_url: str) -> None:
         document_content,
         token,
     )
+    test_fuzzy_company_search(base_url, token)
     test_semantic_search(base_url, client_id)
     test_http_robustness(base_url, client_id)
 
