@@ -182,8 +182,9 @@ def choose_quality_preserving(
     baseline: ExperimentOutcome,
     candidates: Iterable[ExperimentOutcome],
     smallest_parameter: str | None = None,
+    preferred_parameter: str | None = None,
 ) -> ExperimentOutcome:
-    """Prefer better ranking quality while refusing a Recall@10 regression beyond one point."""
+    """Keep Recall@10 stable, then reduce noise before preferring small/simple settings."""
     supported = [
         candidate
         for candidate in candidates
@@ -195,13 +196,15 @@ def choose_quality_preserving(
         raise ValueError("at least one candidate is required")
 
     def quality_key(candidate: ExperimentOutcome) -> tuple[float, float, float, float, float]:
-        parameter = candidate.effective_parameters.get(smallest_parameter, 0) if smallest_parameter else 0
+        smallest_value = candidate.effective_parameters.get(smallest_parameter, 0) if smallest_parameter else 0
+        preferred_value = candidate.effective_parameters.get(preferred_parameter, 0) if preferred_parameter else 0
+        baseline_value = baseline.effective_parameters.get(preferred_parameter, 0) if preferred_parameter else 0
         return (
-            candidate.metrics.ndcg_at_10,
-            candidate.metrics.mrr,
             candidate.metrics.precision_at_10,
             -candidate.metrics.negative_false_positive_rate,
-            -float(parameter) if smallest_parameter else 0,
+            candidate.metrics.ndcg_at_10,
+            candidate.metrics.mrr,
+            -float(smallest_value) if smallest_parameter else -abs(float(preferred_value) - float(baseline_value)),
         )
 
     return max(supported, key=quality_key)
@@ -304,7 +307,7 @@ def run(args: argparse.Namespace) -> None:
         run_experiment(client, tuning, runtime_ids, ExperimentConfig(
             f"threshold-{threshold:.2f}".replace("-", "minus-"), "HYBRID", {"minimumSimilarity": threshold}
         ))
-        for threshold in (-1.0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40)
+        for threshold in (-1.0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
     ]
     chosen_threshold = choose_quality_preserving(baseline, threshold_outcomes)
     candidate_outcomes = [
@@ -326,7 +329,7 @@ def run(args: argparse.Namespace) -> None:
         ))
         for rrf_k in (10, 20, 40, 60, 100)
     ]
-    chosen_rrf = choose_quality_preserving(chosen_candidate, rrf_outcomes)
+    chosen_rrf = choose_quality_preserving(chosen_candidate, rrf_outcomes, preferred_parameter="rrfK")
     weight_outcomes = [
         run_experiment(client, tuning, runtime_ids, ExperimentConfig(
             f"weights-{lexical_weight:.2f}-{vector_weight:.2f}", "HYBRID", {
@@ -351,7 +354,7 @@ def run(args: argparse.Namespace) -> None:
         write_outcome(output_dir, outcome)
     write_summary_table(output_dir, all_outcomes)
     (output_dir / "recommendations.json").write_text(json.dumps({
-        "selectionRule": "Recall@10 may fall by at most 0.01 versus the immediately preceding baseline; then maximize NDCG@10, MRR, Precision@10 and negative-query behavior.",
+        "selectionRule": "Recall@10 may fall by at most 0.01 versus the immediately preceding baseline; then maximize Precision@10 and negative-query behavior before NDCG@10 and MRR. Candidate limits prefer the smallest tied value; RRF ties prefer the existing value.",
         "baseline": _summary_row(baseline),
         "chosenThreshold": _summary_row(chosen_threshold),
         "chosenCandidateLimit": _summary_row(chosen_candidate),
