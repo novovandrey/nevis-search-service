@@ -24,10 +24,21 @@ Revisit these defaults when the corpus grows materially, query behavior changes,
 its input changes, a no-result policy is added, or production latency/quality telemetry becomes
 available. See `SEARCH_QUALITY_EVALUATION.md` for the measurements and limitations.
 
-## Pending no-result decision
+## No-result decision
 
-No production no-result rule is adopted yet. The Python evaluation harness now compares global
-threshold, lexical/semantic-agreement, score-gap and combined policies against an expanded negative
-holdout. A policy may change this decision only after it passes the strict positive-quality gate and
-does not materially regress holdout; otherwise the next justified research step is a second-stage
-relevance/reranking model, not further arbitrary threshold tuning.
+The 2026-08-20 isolated evaluation supports a **score-gap rejection policy as the next production
+candidate**, not a production-default change yet. With the existing hybrid configuration, retain
+lexical-backed results and retain semantic-only results only when their top semantic score exceeds
+the second semantic score by at least `0.003368`.
+
+This policy was selected on tuning because it preserved Recall@10 (0.972), MRR (1.000), NDCG@10
+(0.915) and Precision@10 (0.731), while reducing overall negative FP from 0.778 to 0.444 and hard
+negative FP from 0.857 to 0.714. It also held on the untouched holdout: positive metrics remained
+0.933 / 1.000 / 0.911 / 0.617, overall FP fell from 0.571 to 0.429, and hard-negative FP fell from
+0.667 to 0.333.
+
+A global threshold of 0.35 or higher reduced false positives but violated the strict positive-quality
+gate; lexical/semantic agreement supplied no additional signal because all returned negative
+candidates were semantic-only. The policy must be revisited when the corpus, embedding model or query
+mix changes, and it should be rejected in favour of a second-stage reranker if a broader benchmark
+does not preserve this trade-off. See `SEARCH_QUALITY_EVALUATION.md` for raw evidence and limitations.

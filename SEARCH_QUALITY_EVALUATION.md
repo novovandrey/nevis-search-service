@@ -107,19 +107,79 @@ this small corpus. These timings are diagnostic observations, not load-test clai
 
 ## No-result / false-positive evaluation
 
-The benchmark now contains an explicit negative suite: easy out-of-domain, realistic absent domain
-documents, and hard semantic near-misses. The runner preserves the current production configuration
-as the initial hybrid baseline and measures LEXICAL, SEMANTIC and HYBRID behavior before testing
-rejection policies.
+### Method
 
-For each query it records raw Java branches, candidate counts, top three semantic scores, top-1 to
-top-2 gap, lexical/semantic agreement, strongest hard-negative false positive and latency. It reports
-overall plus easy/domain/hard FP rates and true no-result rate alongside the established positive
-metrics.
+On 2026-08-20 the evaluation worktree on the mini PC was updated to commit `1c9f958`, its
+`nevis-evaluation` Docker volume was removed, and a fresh evaluation-profile service was started on
+port 19090. The normal port-8080 service was not used. The runner created the 13-document synthetic
+corpus through public endpoints, then called only the evaluation endpoint. Its ignored raw evidence
+is retained at `/home/andrey/apps/nevis-evaluation/search-evaluation/output/latest/`.
 
-Thresholds `0.30` through `0.50` run through Java. Agreement, gap and combined policies only
-post-filter Java's returned hybrid list; they do not reproduce FTS, embeddings or RRF in Python.
-A strict candidate must retain Recall@10 within 0.01 and MRR, NDCG@10 and Precision@10 within 0.02
-of baseline. If none qualifies, the runner records a Recall-only sensitivity result without making
-an adoption recommendation. The selected strict policy, if any, is evaluated once against both
-positive and negative holdout before this document is updated with measured tables and conclusion.
+The expanded suite contains 18 tuning negatives (4 easy, 7 domain, 7 hard) and 7 holdout negatives
+(1 easy, 3 domain, 3 hard). A candidate must retain Recall@10 within 0.01 and MRR, NDCG@10 and
+Precision@10 within 0.02 of the hybrid baseline. No Recall-only sensitivity result was needed.
+
+### Baseline and failure pattern
+
+| Tuning mode | Recall@10 | MRR | NDCG@10 | Overall FP | Easy FP | Domain FP | Hard FP | True no-result |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| FTS | 0.569 | 0.625 | 0.518 | 0.000 | 0.000 | 0.000 | 0.000 | 1.000 |
+| Semantic | 0.917 | 1.000 | 0.886 | 0.778 | 0.500 | 0.857 | 0.857 | 0.222 |
+| Hybrid baseline | 0.972 | 1.000 | 0.915 | 0.778 | 0.500 | 0.857 | 0.857 | 0.222 |
+
+Baseline mean / P50 / P95 total latency was 8.9 / 6.5 / 22.5 ms; warmed hybrid mode measured
+5.9 / 6.0 / 7.5 ms. All negative baseline candidates were semantic-only, so retriever agreement
+did not distinguish a reliable negative result in this corpus.
+
+Hard-negative top scores (0.326–0.563) overlap positive relevant scores (0.325–0.658). The failure
+taxonomy is identity-like requests returning `identity-card` or `passport`; financial statements
+returning `bank-statement` or `risk-review`; employment returning `payslip`; and machinery queries
+returning `vehicle-service`. Hard-negative mining records `payslip` for proof of employment,
+`bank-statement` for mortgage repayment and credit-card statements, `identity-card` for child
+identity verification and tax residency, and `risk-review` for investment performance. Employer
+reference correctly returned no result.
+
+### H8: global threshold
+
+| Minimum similarity | Recall@10 | MRR | NDCG@10 | Overall FP | Hard FP |
+|---:|---:|---:|---:|---:|---:|
+| 0.30 | 0.972 | 1.000 | 0.915 | 0.778 | 0.857 |
+| 0.35 | 0.847 | 0.917 | 0.800 | 0.611 | 0.714 |
+| 0.40 | 0.806 | 0.917 | 0.774 | 0.444 | 0.571 |
+| 0.45 | 0.736 | 0.917 | 0.713 | 0.333 | 0.571 |
+| 0.50 | 0.611 | 0.750 | 0.603 | 0.222 | 0.429 |
+
+No stricter global threshold passed the strict positive-quality gate. A single global threshold is
+therefore insufficient for this corpus.
+
+### H9/H10 and policy comparison
+
+Raising the semantic-only threshold alone did not improve false positives while keeping the strict
+gate. Score gaps did provide a narrow useful separator. The selected policy retains lexical-backed
+results and semantic-only results only when the top semantic gap is at least `0.003368`; the value
+was derived from tuning observations rather than set in advance. It post-filters Java's hybrid
+ranking and does not recreate FTS, embeddings or RRF.
+
+| Tuning strategy | Recall@10 | Precision@10 | MRR | NDCG@10 | Overall FP | Easy FP | Domain FP | Hard FP | True no-result |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Hybrid baseline | 0.972 | 0.731 | 1.000 | 0.915 | 0.778 | 0.500 | 0.857 | 0.857 | 0.222 |
+| Global threshold 0.35 | 0.847 | 0.681 | 0.917 | 0.800 | 0.611 | 0.500 | 0.571 | 0.714 | 0.389 |
+| Score gap ≥ 0.003368 | 0.972 | 0.731 | 1.000 | 0.915 | 0.444 | 0.000 | 0.429 | 0.714 | 0.556 |
+
+The gap rule improves overall FP by 33.3 percentage points and hard-negative FP by 14.3 points on
+tuning without changing positive metrics. More aggressive gap or agreement rules reduce FP further
+only by failing the gate.
+
+### Holdout and conclusion
+
+| Holdout configuration | Recall@10 | Precision@10 | MRR | NDCG@10 | Overall FP | Hard FP | True no-result | P95 latency |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Hybrid baseline | 0.933 | 0.617 | 1.000 | 0.911 | 0.571 | 0.667 | 0.429 | 5.45 ms |
+| Score gap ≥ 0.003368 | 0.933 | 0.617 | 1.000 | 0.911 | 0.429 | 0.333 | 0.571 | 5.45 ms |
+
+The improvement survived the held-out run: hard-negative FP fell from two of three to one of three,
+with no positive holdout regression. A simple score-gap rejection policy is therefore
+evaluation-supported as the next production candidate. It is not yet production behavior:
+implementing it in Java requires a separate approved change and integration tests. The benchmark is
+small and synthetic; remaining domain/hard false positives mean a second-stage reranker remains the
+next hypothesis if this rule fails on a broader corpus.
