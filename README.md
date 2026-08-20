@@ -10,7 +10,8 @@ The as-built design is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Prerequisites:
 
 - Docker with Docker Compose;
-- or Java 25, Maven 3.6.3+, and a local PostgreSQL instance for running outside containers.
+- or Java 25, Maven 3.6.3+, and a local PostgreSQL instance with the `pgvector` and `pg_trgm`
+  extensions available for running outside containers.
 
 Start the complete service:
 
@@ -18,9 +19,11 @@ Start the complete service:
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8080`. Flyway applies the schema and seed data
-automatically. Swagger UI is at `http://localhost:8080/swagger-ui.html`, and the OpenAPI document is
-at `http://localhost:8080/v3/api-docs`.
+The API is available at `http://localhost:8080`. Flyway applies the schema and seeds the search-term
+mapping automatically, but it does not create sample clients or documents. `/search` returns no
+document results until you create them through the API below. Swagger UI is at
+`http://localhost:8080/swagger-ui.html`, and the OpenAPI document is at
+`http://localhost:8080/v3/api-docs`.
 
 Stop the service with `docker compose down`. Add `--volumes` only when the local PostgreSQL data may
 be deleted.
