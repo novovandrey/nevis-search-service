@@ -104,3 +104,22 @@ this small corpus. These timings are diagnostic observations, not load-test clai
 - The benchmark is hand-authored and small. It has no statistical significance, user traffic or
   inter-annotator agreement. Document chunking, embedding model lifecycle and reindexing remain out
   of scope as described in `SEMANTIC_SEARCH_LIMITATIONS.md`.
+
+## No-result / false-positive evaluation
+
+The benchmark now contains an explicit negative suite: easy out-of-domain, realistic absent domain
+documents, and hard semantic near-misses. The runner preserves the current production configuration
+as the initial hybrid baseline and measures LEXICAL, SEMANTIC and HYBRID behavior before testing
+rejection policies.
+
+For each query it records raw Java branches, candidate counts, top three semantic scores, top-1 to
+top-2 gap, lexical/semantic agreement, strongest hard-negative false positive and latency. It reports
+overall plus easy/domain/hard FP rates and true no-result rate alongside the established positive
+metrics.
+
+Thresholds `0.30` through `0.50` run through Java. Agreement, gap and combined policies only
+post-filter Java's returned hybrid list; they do not reproduce FTS, embeddings or RRF in Python.
+A strict candidate must retain Recall@10 within 0.01 and MRR, NDCG@10 and Precision@10 within 0.02
+of baseline. If none qualifies, the runner records a Recall-only sensitivity result without making
+an adoption recommendation. The selected strict policy, if any, is evaluated once against both
+positive and negative holdout before this document is updated with measured tables and conclusion.

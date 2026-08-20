@@ -23,3 +23,11 @@ lexical/vector      = 1.25 / 1.0
 Revisit these defaults when the corpus grows materially, query behavior changes, the embedding model or
 its input changes, a no-result policy is added, or production latency/quality telemetry becomes
 available. See `SEARCH_QUALITY_EVALUATION.md` for the measurements and limitations.
+
+## Pending no-result decision
+
+No production no-result rule is adopted yet. The Python evaluation harness now compares global
+threshold, lexical/semantic-agreement, score-gap and combined policies against an expanded negative
+holdout. A policy may change this decision only after it passes the strict positive-quality gate and
+does not materially regress holdout; otherwise the next justified research step is a second-stage
+relevance/reranking model, not further arbitrary threshold tuning.

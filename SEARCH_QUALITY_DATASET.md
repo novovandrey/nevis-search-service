@@ -20,8 +20,8 @@ embeddings, PostgreSQL FTS and ranking.
 
 ## Queries and splits
 
-There are 20 queries: 14 in the tuning split and 6 in the holdout split. Both splits contain
-positive queries and a negative expected-no-result query. The benchmark covers these categories:
+There are 42 queries: 30 in the tuning split and 12 in the holdout split. Both splits contain
+positive queries and explicit expected-no-result queries. The benchmark covers these categories:
 
 | Category | Example |
 |---|---|
@@ -30,11 +30,17 @@ positive queries and a negative expected-no-result query. The benchmark covers t
 | Domain vocabulary | `proof of address`, `identity documentation` |
 | Natural language | `where does the customer live` |
 | Ambiguous | `address`, `income`, `investments` |
-| Negative | `aircraft maintenance manual`, `marine engine repair` |
+| Easy negative | `aircraft maintenance manual`, `restaurant reservation` |
+| Domain negative | `driver licence`, `mortgage agreement` |
+| Hard negative | `proof of employment`, `mortgage repayment statement` |
 
-The tuning split selects retrieval strategy and parameters. The holdout remains uninspected while
-selecting `minimumSimilarity`, candidate limit, RRF `k`, or optional retriever weights, and is run
-only against the selected final configuration.
+The 25 negative queries are split 18 tuning / 7 holdout: 5 easy, 10 domain and 10 hard. Every
+negative has an empty `judgments` object, which is the explicit product judgement that no document
+in this corpus is relevant. It is not relabelled after observing an embedding match. The tuning
+split selects a rejection policy; the negative holdout is reserved for final validation.
+
+`insurance policy` is deliberately not a negative query because the corpus contains a life-insurance
+policy. `vehicle registration certificate` is used instead as an absent, related domain document.
 
 ## Relevance labels
 
@@ -49,8 +55,8 @@ Judgments use a four-point scale:
 
 Queries can have multiple relevant documents. Recall, precision and MRR treat grades 2 and 3 as
 relevant; NDCG retains all grades, including weakly related grade-1 material. Negative queries
-have no positive judgments. Their primary behavior measures are zero-result rate and the reported
-negative false-positive rate.
+have no positive judgments. Their primary behavior measures are overall negative false-positive
+rate, true no-result rate, and separate easy/domain/hard false-positive rates.
 
 ## Metric semantics
 

@@ -33,6 +33,10 @@ class MetricsSummary:
     ndcg_at_10: float
     zero_result_rate: float
     negative_false_positive_rate: float
+    true_no_result_rate: float
+    easy_negative_false_positive_rate: float
+    domain_negative_false_positive_rate: float
+    hard_negative_false_positive_rate: float
     mean_latency_ms: float
     p50_latency_ms: float
     p95_latency_ms: float
@@ -47,7 +51,7 @@ def summarize(rankings: Sequence[QueryRanking]) -> MetricsSummary:
     if not rankings:
         raise ValueError("at least one ranking is required")
     positives = [ranking for ranking in rankings if ranking.query.has_relevant_document]
-    negatives = [ranking for ranking in rankings if ranking.query.category == "NEGATIVE"]
+    negatives = [ranking for ranking in rankings if ranking.query.is_negative]
     graded = [ranking for ranking in rankings if any(grade > 0 for grade in ranking.query.judgments.values())]
     latencies = sorted(ranking.total_ms for ranking in rankings)
     return MetricsSummary(
@@ -58,6 +62,10 @@ def summarize(rankings: Sequence[QueryRanking]) -> MetricsSummary:
         ndcg_at_10=_average(_ndcg_at(ranking, 10) for ranking in graded),
         zero_result_rate=sum(not ranking.results for ranking in rankings) / len(rankings),
         negative_false_positive_rate=_average(bool(ranking.results) for ranking in negatives),
+        true_no_result_rate=_average(not ranking.results for ranking in negatives),
+        easy_negative_false_positive_rate=_negative_false_positive_rate(rankings, "EASY_NEGATIVE"),
+        domain_negative_false_positive_rate=_negative_false_positive_rate(rankings, "DOMAIN_NEGATIVE"),
+        hard_negative_false_positive_rate=_negative_false_positive_rate(rankings, "HARD_NEGATIVE"),
         mean_latency_ms=mean(latencies),
         p50_latency_ms=_percentile(latencies, 0.50),
         p95_latency_ms=_percentile(latencies, 0.95),
@@ -110,3 +118,7 @@ def _percentile(sorted_values: Sequence[int], quantile: float) -> float:
     upper = min(lower + 1, len(sorted_values) - 1)
     fraction = index - lower
     return sorted_values[lower] + (sorted_values[upper] - sorted_values[lower]) * fraction
+
+
+def _negative_false_positive_rate(rankings: Sequence[QueryRanking], category: str) -> float:
+    return _average(bool(ranking.results) for ranking in rankings if ranking.query.category == category)

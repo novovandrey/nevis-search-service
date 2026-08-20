@@ -12,8 +12,11 @@ VALID_CATEGORIES = {
     "DOMAIN_VOCABULARY",
     "NATURAL_LANGUAGE",
     "AMBIGUOUS",
-    "NEGATIVE",
+    "EASY_NEGATIVE",
+    "DOMAIN_NEGATIVE",
+    "HARD_NEGATIVE",
 }
+NEGATIVE_CATEGORIES = {"EASY_NEGATIVE", "DOMAIN_NEGATIVE", "HARD_NEGATIVE"}
 VALID_SPLITS = {"TUNING", "HOLDOUT"}
 
 
@@ -38,6 +41,10 @@ class EvaluationQuery:
     @property
     def has_relevant_document(self) -> bool:
         return any(grade >= 2 for grade in self.judgments.values())
+
+    @property
+    def is_negative(self) -> bool:
+        return self.category in NEGATIVE_CATEGORIES
 
 
 @dataclass(frozen=True)
@@ -92,7 +99,7 @@ def validate(dataset: EvaluationDataset) -> None:
             raise ValueError(f"query {query.id} has a judgment for an unknown document")
         if any(not isinstance(grade, int) or grade < 0 or grade > 3 for grade in query.judgments.values()):
             raise ValueError(f"query {query.id} has a relevance grade outside [0, 3]")
-        if query.category == "NEGATIVE" and query.has_relevant_document:
+        if query.is_negative and query.has_relevant_document:
             raise ValueError(f"negative query {query.id} must not have relevant documents")
-        if query.category != "NEGATIVE" and not query.has_relevant_document:
+        if not query.is_negative and not query.has_relevant_document:
             raise ValueError(f"positive query {query.id} needs a grade 2 or 3 judgment")

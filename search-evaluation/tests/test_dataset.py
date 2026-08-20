@@ -14,7 +14,7 @@ class DatasetTest(unittest.TestCase):
         self.assertGreaterEqual(len(dataset.documents), 10)
         self.assertTrue(dataset.queries_for("TUNING"))
         self.assertTrue(dataset.queries_for("HOLDOUT"))
-        self.assertTrue(any(query.category == "NEGATIVE" for query in dataset.queries))
+        self.assertTrue(any(query.is_negative for query in dataset.queries))
         self.assertTrue({query.id for query in dataset.queries_for("TUNING")}.isdisjoint(
             {query.id for query in dataset.queries_for("HOLDOUT")}
         ))
@@ -24,9 +24,21 @@ class DatasetTest(unittest.TestCase):
             documents=(EvaluationDocument("one", "One", "One"),),
             queries=(
                 EvaluationQuery("tuning", "one", "EXACT_LEXICAL", "TUNING", {}),
-                EvaluationQuery("holdout", "nothing", "NEGATIVE", "HOLDOUT", {}),
+                EvaluationQuery("holdout", "nothing", "EASY_NEGATIVE", "HOLDOUT", {}),
             ),
         )
 
         with self.assertRaisesRegex(ValueError, "grade 2 or 3"):
             validate(dataset)
+
+    def test_rejects_relevant_judgment_for_every_negative_category(self) -> None:
+        for category in ("EASY_NEGATIVE", "DOMAIN_NEGATIVE", "HARD_NEGATIVE"):
+            dataset = EvaluationDataset(
+                documents=(EvaluationDocument("one", "One", "One"),),
+                queries=(
+                    EvaluationQuery("tuning", "one", "EXACT_LEXICAL", "TUNING", {"one": 3}),
+                    EvaluationQuery("holdout", "nothing", category, "HOLDOUT", {"one": 2}),
+                ),
+            )
+            with self.assertRaisesRegex(ValueError, "must not have relevant"):
+                validate(dataset)

@@ -154,14 +154,126 @@
     {
       "id": "negative-aircraft",
       "text": "aircraft maintenance manual",
-      "category": "NEGATIVE",
+      "category": "EASY_NEGATIVE",
       "split": "TUNING",
       "judgments": {}
     },
     {
       "id": "negative-marine",
       "text": "marine engine repair",
-      "category": "NEGATIVE",
+      "category": "EASY_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-restaurant-reservation",
+      "text": "restaurant reservation",
+      "category": "EASY_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-software-deployment",
+      "text": "software deployment guide",
+      "category": "EASY_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-birth-certificate",
+      "text": "birth certificate",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-driver-licence",
+      "text": "driver licence",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-employment-contract",
+      "text": "employment contract",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-mortgage-agreement",
+      "text": "mortgage agreement",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-dividend-certificate",
+      "text": "dividend certificate",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-marriage-certificate",
+      "text": "marriage certificate",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-visa-document",
+      "text": "visa document",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-proof-employment",
+      "text": "proof of employment",
+      "category": "HARD_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-mortgage-repayment",
+      "text": "mortgage repayment statement",
+      "category": "HARD_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-child-identity-verification",
+      "text": "identity verification for a child",
+      "category": "HARD_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-employer-reference",
+      "text": "employer reference letter",
+      "category": "HARD_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-credit-card-statement",
+      "text": "credit card statement",
+      "category": "HARD_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-investment-performance",
+      "text": "investment performance statement",
+      "category": "HARD_NEGATIVE",
+      "split": "TUNING",
+      "judgments": {}
+    },
+    {
+      "id": "negative-tax-residency",
+      "text": "tax residency certificate",
+      "category": "HARD_NEGATIVE",
       "split": "TUNING",
       "judgments": {}
     },
@@ -203,7 +315,49 @@
     {
       "id": "holdout-negative-lunar",
       "text": "lunar mining permit",
-      "category": "NEGATIVE",
+      "category": "EASY_NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-negative-property-deed",
+      "text": "property deed",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-negative-pension-statement",
+      "text": "pension statement",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-negative-vehicle-registration",
+      "text": "vehicle registration certificate",
+      "category": "DOMAIN_NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-negative-council-tax",
+      "text": "council tax demand notice",
+      "category": "HARD_NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-negative-beneficiary-designation",
+      "text": "beneficiary designation form",
+      "category": "HARD_NEGATIVE",
+      "split": "HOLDOUT",
+      "judgments": {}
+    },
+    {
+      "id": "holdout-negative-passport-renewal",
+      "text": "passport renewal application",
+      "category": "HARD_NEGATIVE",
       "split": "HOLDOUT",
       "judgments": {}
     }

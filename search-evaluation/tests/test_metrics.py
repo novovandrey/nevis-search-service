@@ -26,7 +26,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_handles_no_results_and_negative_queries_explicitly(self) -> None:
         positive = EvaluationQuery("positive", "passport", "EXACT_LEXICAL", "TUNING", {"passport": 3})
-        negative = EvaluationQuery("negative", "moon", "NEGATIVE", "TUNING", {})
+        negative = EvaluationQuery("negative", "moon", "EASY_NEGATIVE", "TUNING", {})
         summary = summarize([
             QueryRanking(positive, (), 4),
             QueryRanking(negative, (), 6),
@@ -37,4 +37,22 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(summary.ndcg_at_10, 0.0)
         self.assertEqual(summary.zero_result_rate, 1.0)
         self.assertEqual(summary.negative_false_positive_rate, 0.0)
+        self.assertEqual(summary.true_no_result_rate, 1.0)
+        self.assertEqual(summary.easy_negative_false_positive_rate, 0.0)
         self.assertEqual(summary.p50_latency_ms, 5.0)
+
+    def test_reports_false_positives_by_negative_category(self) -> None:
+        positives = EvaluationQuery("positive", "passport", "EXACT_LEXICAL", "TUNING", {"passport": 3})
+        easy = EvaluationQuery("easy", "moon", "EASY_NEGATIVE", "TUNING", {})
+        domain = EvaluationQuery("domain", "licence", "DOMAIN_NEGATIVE", "TUNING", {})
+        hard = EvaluationQuery("hard", "employment", "HARD_NEGATIVE", "TUNING", {})
+        summary = summarize([
+            QueryRanking(positives, (RankedDocument("passport", 1, 1.0),), 1),
+            QueryRanking(easy, (), 1),
+            QueryRanking(domain, (RankedDocument("passport", 1, 0.4),), 1),
+            QueryRanking(hard, (RankedDocument("payslip", 1, 0.4),), 1),
+        ])
+        self.assertEqual(summary.easy_negative_false_positive_rate, 0.0)
+        self.assertEqual(summary.domain_negative_false_positive_rate, 1.0)
+        self.assertEqual(summary.hard_negative_false_positive_rate, 1.0)
+        self.assertEqual(summary.true_no_result_rate, 1 / 3)
