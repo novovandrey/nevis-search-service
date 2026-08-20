@@ -194,7 +194,7 @@ Validation and failures use a consistent response shape:
 | `MAX_QUERY_LENGTH` | `255` | Maximum normalized query length |
 | `MAX_SEARCH_RESULTS` | `50` | Maximum merged document results |
 | `CLIENT_TRIGRAM_SIMILARITY_THRESHOLD` | `0.50` | Minimum `pg_trgm` similarity for fuzzy client-company matches |
-| `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum candidates from each retrieval branch |
+| `SEMANTIC_CANDIDATE_LIMIT` | `10` | Maximum candidates from each retrieval branch |
 | `SEMANTIC_RRF_K` | `60` | Reciprocal Rank Fusion constant |
 | `SEMANTIC_MINIMUM_SIMILARITY` | `0.30` | Minimum cosine similarity for semantic candidates |
 | `SEMANTIC_LEXICAL_WEIGHT` | `1.25` | Weighted RRF contribution from the lexical ranking |
@@ -220,13 +220,11 @@ Validation and failures use a consistent response shape:
 - A shared database is appropriate for this implementation. Tenant, RLS, and database-per-client
   models are not introduced. Stronger isolation is a future product and operations trade-off.
 - Raw lexical and cosine scores are not added directly. Weighted rank-based RRF gives the lexical
-  ranking a calibrated `1.25:1.0` preference while still boosting results present in both branches.
-- Calibration against the real MiniLM model and PostgreSQL used twelve representative queries and
-  exact long-title boundary fixtures. Threshold `0.45` improved precision but was rejected because
-  a required semantic-only match measured only `0.314602`; the calibrated global threshold therefore
-  remains `0.30`. For `address`, the synthetic boundary measured cosine `0.491570`, while the literal
-  `Manual Browser Utility Bill` measured `0.360140`; lexical weight `1.25` keeps literal evidence above
-  a semantic-only candidate without sacrificing the measured semantic recall.
+  ranking a `1.25:1.0` preference while still boosting results present in both branches.
+- A reproducible benchmark evaluates the real Java implementation through an evaluation-profile-only
+  endpoint. The current evidence-supported defaults are `minimumSimilarity=0.30`, `candidateLimit=10`,
+  `rrfK=60`, and lexical/vector weights `1.25:1.0`; see
+  [`SEARCH_QUALITY_EVALUATION.md`](SEARCH_QUALITY_EVALUATION.md) for results and limitations.
 - Client company keys are a stored PostgreSQL generated column. Exact lookup uses a partial B-tree index;
   typo-tolerant lookup uses the partial `pg_trgm` GIN index with `%` as the candidate predicate and
   `similarity()` as the final threshold/ranking score. The measured test similarities against

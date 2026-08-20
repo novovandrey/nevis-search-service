@@ -521,6 +521,13 @@ class NevisPostgresIntegrationTest {
         mockMvc.perform(get("/search"))
                 .andExpect(status().isBadRequest());
 
+        mockMvc.perform(post("/internal/evaluation/search")
+                        .contentType("application/json")
+                        .content("""
+                                {"query":"passport","mode":"HYBRID"}
+                                """))
+                .andExpect(status().isNotFound());
+
         mockMvc.perform(post("/clients")
                         .contentType("application/json")
                         .content("{invalid"))

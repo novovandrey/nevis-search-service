@@ -23,7 +23,7 @@ nevis:
     client:
       trigram-threshold: ${CLIENT_TRIGRAM_SIMILARITY_THRESHOLD:0.50}
     semantic:
-      candidate-limit: ${SEMANTIC_CANDIDATE_LIMIT:50}
+      candidate-limit: ${SEMANTIC_CANDIDATE_LIMIT:10}
       rrf-k: ${SEMANTIC_RRF_K:60}
       minimum-similarity: ${SEMANTIC_MINIMUM_SIMILARITY:0.30}
       lexical-weight: ${SEMANTIC_LEXICAL_WEIGHT:1.25}
