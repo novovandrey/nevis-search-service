@@ -197,7 +197,7 @@ class HybridSearchCalibrationTest {
                     queryExpander.expand(queryNormalizer.normalize(query)), CANDIDATE_LIMIT
             );
             List<DocumentSearchResult> semantic = semanticDocumentSearchPort.search(
-                    embeddingPort.embed(query), CANDIDATE_LIMIT, 250, 500, -1.0
+                    embeddingPort.embedQuery(query), CANDIDATE_LIMIT, 250, 500, -1.0
             );
             retrievals.put(query, new Retrieval(lexical, semantic));
         }

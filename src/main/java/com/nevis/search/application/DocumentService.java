@@ -49,7 +49,7 @@ public class DocumentService {
         Document document = new Document(UUID.randomUUID(), clientId, title.strip(), content, Instant.now());
         List<DocumentChunk> chunks = documentChunker.chunk(document.title(), document.content()).stream()
                 .map(chunk -> new DocumentChunk(
-                        chunk.index(), chunk.body(), embeddingPort.embed(chunk.embeddingInput())
+                        chunk.index(), chunk.body(), embeddingPort.embedPassage(chunk.embeddingInput())
                 ))
                 .toList();
         return documentRepository.save(document, chunks);

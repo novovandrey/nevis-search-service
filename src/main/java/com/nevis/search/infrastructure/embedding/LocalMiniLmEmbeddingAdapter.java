@@ -18,7 +18,16 @@ public class LocalMiniLmEmbeddingAdapter implements EmbeddingPort {
     }
 
     @Override
-    public EmbeddingVector embed(String text) {
+    public EmbeddingVector embedQuery(String text) {
+        return embed(text);
+    }
+
+    @Override
+    public EmbeddingVector embedPassage(String text) {
+        return embed(text);
+    }
+
+    private EmbeddingVector embed(String text) {
         float[] embedding = embeddingModel.embed(text).content().vector();
         return EmbeddingVector.of(embedding, capabilities);
     }

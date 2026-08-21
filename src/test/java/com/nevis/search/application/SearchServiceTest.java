@@ -52,7 +52,8 @@ class SearchServiceTest {
                 embedding, documentLimit, chunkLimit, efSearch, minimumSimilarity
         ) -> List.of();
         EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities("test", 384, 510);
-        EmbeddingPort embeddings = text -> EmbeddingVector.of(new float[384], capabilities);
+        AtomicReference<String> embeddedQuery = new AtomicReference<>();
+        EmbeddingPort embeddings = queryEmbeddings(capabilities, embeddedQuery);
         SearchService service = new SearchService(
                 normalizer, clientNormalizer, expander, clientSearch, documentSearch,
                 semanticSearch, embeddings, new HybridDocumentSearchMerger(semanticProperties, properties), semanticProperties
@@ -64,6 +65,7 @@ class SearchServiceTest {
         assertThat(result.documents()).extracting(DocumentSearchResult::document).containsExactly(document);
         assertThat(capturedClientQuery.get().value()).isEqualTo("addressproof");
         assertThat(capturedTerms.get()).containsExactlyInAnyOrder("address proof", "utility bill");
+        assertThat(embeddedQuery).hasValue("address proof");
     }
 
     @Test
@@ -86,7 +88,7 @@ class SearchServiceTest {
                 (embedding, documentLimit, chunkLimit, efSearch, minimumSimilarity) -> {
                     throw new IllegalStateException("Vector search unavailable");
                 },
-                text -> EmbeddingVector.of(new float[384], capabilities),
+                queryEmbeddings(capabilities, new AtomicReference<>()),
                 new HybridDocumentSearchMerger(semanticProperties, properties),
                 semanticProperties
         );
@@ -94,5 +96,23 @@ class SearchServiceTest {
         assertThat(service.search("passport").documents())
                 .extracting(DocumentSearchResult::document)
                 .containsExactly(document);
+    }
+
+    private EmbeddingPort queryEmbeddings(
+            EmbeddingModelCapabilities capabilities,
+            AtomicReference<String> embeddedQuery
+    ) {
+        return new EmbeddingPort() {
+            @Override
+            public EmbeddingVector embedQuery(String text) {
+                embeddedQuery.set(text);
+                return EmbeddingVector.of(new float[384], capabilities);
+            }
+
+            @Override
+            public EmbeddingVector embedPassage(String text) {
+                throw new AssertionError("SearchService must not embed passages");
+            }
+        };
     }
 }

@@ -243,7 +243,7 @@ class NevisPostgresIntegrationTest {
         Document manual = new Document(
                 UUID.randomUUID(), client.id(), "Atomic document", "Body", Instant.now()
         );
-        EmbeddingVector vector = embeddingPort.embed("Atomic document\n\nBody");
+        EmbeddingVector vector = embeddingPort.embedPassage("Atomic document\n\nBody");
         List<DocumentChunk> duplicateChunks = List.of(
                 new DocumentChunk(0, "first", vector),
                 new DocumentChunk(0, "duplicate", vector)
@@ -262,11 +262,19 @@ class NevisPostgresIntegrationTest {
         DocumentService failingService = new DocumentService(
                 clientRepository,
                 documentRepository,
-                text -> {
-                    if (embeddingCalls.incrementAndGet() == 2) {
-                        throw new IllegalStateException("Embedding unavailable");
+                new EmbeddingPort() {
+                    @Override
+                    public EmbeddingVector embedQuery(String text) {
+                        throw new AssertionError("DocumentService must not embed queries");
                     }
-                    return EmbeddingVector.of(new float[384], embeddingModelCapabilities);
+
+                    @Override
+                    public EmbeddingVector embedPassage(String text) {
+                        if (embeddingCalls.incrementAndGet() == 2) {
+                            throw new IllegalStateException("Embedding unavailable");
+                        }
+                        return EmbeddingVector.of(new float[384], embeddingModelCapabilities);
+                    }
                 },
                 documentProperties,
                 documentChunker
@@ -301,7 +309,7 @@ class NevisPostgresIntegrationTest {
         assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
                 .param("id", document.id()).query(Long.class).single()).isGreaterThan(1L);
 
-        EmbeddingVector query = embeddingPort.embed("evidence of where the customer lives");
+        EmbeddingVector query = embeddingPort.embedQuery("evidence of where the customer lives");
         List<DocumentSearchResult> results = semanticDocumentSearchPort.search(query, 50, 250, 500, 0.30);
 
         assertThat(results).extracting(result -> result.document().id()).containsOnlyOnce(document.id());
@@ -483,7 +491,7 @@ class NevisPostgresIntegrationTest {
         assertThat(documentSearchPort.search(Set.of(query), 50)).isEmpty();
 
         List<DocumentSearchResult> semanticResults = semanticDocumentSearchPort.search(
-                embeddingPort.embed(query), 1, 250, 500, 0.30
+                embeddingPort.embedQuery(query), 1, 250, 500, 0.30
         );
 
         assertThat(semanticResults).extracting(result -> result.document().id())
@@ -501,7 +509,7 @@ class NevisPostgresIntegrationTest {
 
         assertThat(documentSearchPort.search(Set.of("passport"), 50))
                 .extracting(result -> result.document().id()).contains(document.id());
-        assertThat(semanticDocumentSearchPort.search(embeddingPort.embed("passport"), 50, 250, 500, 0.30))
+        assertThat(semanticDocumentSearchPort.search(embeddingPort.embedQuery("passport"), 50, 250, 500, 0.30))
                 .extracting(result -> result.document().id()).contains(document.id());
         assertThat(searchService.search("passport").documents())
                 .extracting(result -> result.document().id()).containsOnlyOnce(document.id());

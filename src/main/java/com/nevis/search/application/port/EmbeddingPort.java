@@ -4,5 +4,7 @@ import com.nevis.search.application.embedding.EmbeddingVector;
 
 public interface EmbeddingPort {
 
-    EmbeddingVector embed(String text);
+    EmbeddingVector embedQuery(String text);
+
+    EmbeddingVector embedPassage(String text);
 }

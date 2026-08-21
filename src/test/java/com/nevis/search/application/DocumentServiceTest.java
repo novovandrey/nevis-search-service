@@ -7,6 +7,7 @@ import com.nevis.search.application.exception.InvalidRequestException;
 import com.nevis.search.application.port.ClientRepository;
 import com.nevis.search.application.port.DocumentRepository;
 import com.nevis.search.application.port.EmbeddingTokenizerPort;
+import com.nevis.search.application.port.EmbeddingPort;
 import com.nevis.search.config.DocumentChunkingProperties;
 import com.nevis.search.config.DocumentProperties;
 import com.nevis.search.domain.Client;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,9 +57,9 @@ class DocumentServiceTest {
             return document;
         };
         DocumentService service = new DocumentService(
-                clients, documents, text -> {
+                clients, documents, passageEmbeddings(text -> {
                     throw new IllegalStateException("Embedding unavailable");
-                }, new DocumentProperties(1_000), chunker()
+                }), new DocumentProperties(1_000), chunker()
         );
 
         assertThatThrownBy(() -> service.create(clientId, "Title", "Content"))
@@ -78,10 +80,24 @@ class DocumentServiceTest {
         return new DocumentService(
                 clients,
                 documents,
-                text -> EmbeddingVector.of(new float[384], capabilities()),
+                passageEmbeddings(text -> EmbeddingVector.of(new float[384], capabilities())),
                 new DocumentProperties(contentLimit),
                 chunker()
         );
+    }
+
+    private EmbeddingPort passageEmbeddings(Function<String, EmbeddingVector> embeddings) {
+        return new EmbeddingPort() {
+            @Override
+            public EmbeddingVector embedQuery(String text) {
+                throw new AssertionError("DocumentService must not embed queries");
+            }
+
+            @Override
+            public EmbeddingVector embedPassage(String text) {
+                return embeddings.apply(text);
+            }
+        };
     }
 
     private DocumentChunker chunker() {

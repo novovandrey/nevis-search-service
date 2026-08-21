@@ -14,13 +14,13 @@ class LocalMiniLmEmbeddingAdapterTest {
         );
         LocalMiniLmEmbeddingAdapter embeddings = new LocalMiniLmEmbeddingAdapter(capabilities);
 
-        float[] query = embeddings.embed("evidence of where the customer lives").values();
-        float[] residenceEvidence = embeddings.embed("""
+        float[] query = embeddings.embedQuery("evidence of where the customer lives").values();
+        float[] residenceEvidence = embeddings.embedPassage("""
                 Monthly statement
 
                 The customer receives a monthly electricity statement for the apartment at 10 King Street.
                 """).values();
-        float[] recipe = embeddings.embed("""
+        float[] recipe = embeddings.embedPassage("""
                 Cooking notes
 
                 The recipe uses olive oil, tomatoes, basil and pasta for dinner.
@@ -31,9 +31,11 @@ class LocalMiniLmEmbeddingAdapterTest {
                 .isGreaterThan(0.30)
                 .isGreaterThan(cosine(query, recipe));
         assertThat(cosine(
-                embeddings.embed("zzzx qqqv non-existent search token").values(), residenceEvidence
+                embeddings.embedQuery("zzzx qqqv non-existent search token").values(), residenceEvidence
         ))
                 .isLessThan(0.30);
+        assertThat(embeddings.embedQuery("same input").values())
+                .containsExactly(embeddings.embedPassage("same input").values());
     }
 
     private double cosine(float[] left, float[] right) {
