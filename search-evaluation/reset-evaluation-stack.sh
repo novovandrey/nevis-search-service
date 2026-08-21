@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: $0 MODEL MAX_INPUT_TOKENS OVERLAP_TOKENS" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+  echo "usage: $0 MODEL MAX_INPUT_TOKENS OVERLAP_TOKENS [MINIMUM_SIMILARITY]" >&2
   exit 2
 fi
 
 evaluation_model="$1"
 max_input_tokens="$2"
 overlap_tokens="$3"
+minimum_similarity="${4:-0.30}"
 project="nevis-evaluation"
 compose_files=(-f compose.yaml -f search-evaluation/compose.evaluation.yaml)
 
@@ -21,7 +22,7 @@ export DOCUMENT_CHUNK_OVERLAP_TOKENS="$overlap_tokens"
 export SEMANTIC_CANDIDATE_LIMIT=50
 export SEMANTIC_CHUNK_CANDIDATE_LIMIT=250
 export SEMANTIC_HNSW_EF_SEARCH=500
-export SEMANTIC_MINIMUM_SIMILARITY=0.30
+export SEMANTIC_MINIMUM_SIMILARITY="$minimum_similarity"
 
 docker compose "${compose_files[@]}" -p "$project" down --volumes --remove-orphans
 docker compose "${compose_files[@]}" -p "$project" up -d --build

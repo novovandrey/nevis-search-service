@@ -12,6 +12,15 @@ Start a dedicated, empty evaluation instance on API port `18080` and loopback-on
 ./search-evaluation/reset-evaluation-stack.sh MINILM 240 30
 ```
 
+An optional fourth argument sets the stack's default similarity threshold. Load a final corpus
+without running tuning or consuming holdout queries with:
+
+```bash
+./search-evaluation/reset-evaluation-stack.sh E5_SMALL_V2 240 30 0.825637
+search-evaluation/.venv/bin/python search-evaluation/load_corpus.py \
+  --output search-evaluation/output/final-e5-corpus.json
+```
+
 The project name is deliberate: it keeps the evaluation database separate from a normal local
 instance. Before a new benchmark run, stop that project and remove *only* its named volume:
 

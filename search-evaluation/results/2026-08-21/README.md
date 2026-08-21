@@ -26,3 +26,12 @@ in the repository reports.
 | `minilm-160-holdout.json` | holdout | MiniLM | 160/32/20 | `9e264fa6d308c9cc39b65bf357068b4a2a37366356af9ba10d6d26afcf4d894e` |
 | `bge-240-holdout.json` | holdout | BGE small en v1.5 | 240/32/30 | `c8b596c4753966e7e3517d5fd978705137078edcc2316e29398329e5a9efbecf` |
 | `e5-240-holdout.json` | holdout | E5 small v2 | 240/32/30 | `9085f635718de7c48e97ebad68879c37dd71692d43cbbdefcc85d1eeb190707a` |
+
+Scale runs used commit `f052f7a`, seed `20260821`, synthetic finite normalized 384-dimensional
+vectors, 10 warmup and 100 measured queries. They are not tied to an embedding model or quality
+split. The 1M run was cancelled by owner decision and produced no evidence file.
+
+| Aggregate | Scale | SHA-256 |
+|---|---:|---|
+| `scale-100k.json` | 100,000 chunks | `d5403adde7968dec7681cdd307bdb2d5e98cf80ba0de820e5ee625d5e13e944f` |
+| `scale-500k.json` | 500,000 chunks | `e50f1b732ace72e1d9ea009a6b46cbb1b4a9437cc673c41dbe839c2a6e93c2e5` |
