@@ -7,10 +7,12 @@ import com.nevis.search.application.port.DocumentRepository;
 import com.nevis.search.application.port.EmbeddingPort;
 import com.nevis.search.config.DocumentProperties;
 import com.nevis.search.domain.Document;
+import com.nevis.search.domain.DocumentChunk;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -20,17 +22,20 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final EmbeddingPort embeddingPort;
     private final DocumentProperties documentProperties;
+    private final DocumentChunker documentChunker;
 
     public DocumentService(
             ClientRepository clientRepository,
             DocumentRepository documentRepository,
             EmbeddingPort embeddingPort,
-            DocumentProperties documentProperties
+            DocumentProperties documentProperties,
+            DocumentChunker documentChunker
     ) {
         this.clientRepository = clientRepository;
         this.documentRepository = documentRepository;
         this.embeddingPort = embeddingPort;
         this.documentProperties = documentProperties;
+        this.documentChunker = documentChunker;
     }
 
     @Transactional
@@ -42,8 +47,12 @@ public class DocumentService {
             );
         }
         Document document = new Document(UUID.randomUUID(), clientId, title.strip(), content, Instant.now());
-        float[] embedding = embeddingPort.embed(document.title() + "\n\n" + document.content());
-        return documentRepository.save(document, embedding);
+        List<DocumentChunk> chunks = documentChunker.chunk(document.title(), document.content()).stream()
+                .map(chunk -> new DocumentChunk(
+                        chunk.index(), chunk.body(), embeddingPort.embedPassage(chunk.embeddingInput())
+                ))
+                .toList();
+        return documentRepository.save(document, chunks);
     }
 
     private void requireClient(UUID clientId) {

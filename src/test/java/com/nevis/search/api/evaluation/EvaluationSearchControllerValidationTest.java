@@ -41,7 +41,7 @@ class EvaluationSearchControllerValidationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Request validation failed"))
                 .andExpect(jsonPath("$.violations[*].field").value(org.hamcrest.Matchers.containsInAnyOrder(
-                        "candidateLimit", "minimumSimilarity"
+                        "documentCandidateLimit", "minimumSimilarity"
                 )));
 
         verifyNoInteractions(searchEvaluationService);

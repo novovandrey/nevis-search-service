@@ -25,8 +25,20 @@ public class EvaluationSearchController {
     @Operation(summary = "Execute an internal diagnostic document-search evaluation")
     public EvaluationSearchResponse search(@Valid @RequestBody EvaluationSearchRequest request) {
         SearchEvaluationResult result = searchEvaluationService.evaluate(
-                request.query(), request.mode(), request.overrides()
+                request.query(), request.mode(), request.resolvedSemanticRetrieval(), request.overrides()
         );
         return EvaluationSearchResponse.from(result);
+    }
+
+    @PostMapping("/semantic-plan")
+    @Operation(summary = "Explain an internal exact or HNSW chunk retrieval")
+    public EvaluationSemanticPlanResponse semanticPlan(
+            @Valid @RequestBody EvaluationSemanticPlanRequest request
+    ) {
+        String plan = searchEvaluationService.explain(
+                request.query(), request.semanticRetrieval(),
+                request.chunkCandidateLimit(), request.hnswEfSearch()
+        );
+        return new EvaluationSemanticPlanResponse(request.query(), request.semanticRetrieval(), plan);
     }
 }

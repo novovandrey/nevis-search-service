@@ -649,6 +649,27 @@ def test_semantic_search(base_url: str, client_id: str) -> None:
     )
     print("PASS semantic search finds a document without lexical overlap or an explicit term mapping")
 
+    late_content = (
+        "cooking " * 414
+        + "\n\n"
+        + "The customer receives a monthly electricity statement for the apartment at 10 King Street. " * 30
+    )
+    late_document_id, late_response = create_document(
+        base_url,
+        client_id,
+        "Monthly electricity statement archive",
+        late_content,
+    )
+    check(late_response["content"] == late_content, "chunked document response did not preserve full content")
+    response = search_request(base_url, "evidence of where the customer lives")
+    expect_status(response, 200, "late-window semantic document search")
+    assert_search_shape(response, "late-window semantic document search")
+    check(
+        contains_entity_with_id(response.body, late_document_id),
+        f"semantic search did not find late document content {late_document_id}: {response.raw}",
+    )
+    print("PASS semantic search finds a concept after the first embedding context window")
+
 
 def run(base_url: str) -> None:
     token = uuid.uuid4().hex[:12]

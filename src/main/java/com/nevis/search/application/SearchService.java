@@ -71,8 +71,10 @@ public class SearchService {
     private List<DocumentSearchResult> semanticSearch(SearchQuery query) {
         try {
             return semanticDocumentSearchPort.search(
-                    embeddingPort.embed(query.value()),
+                    embeddingPort.embedQuery(query.value()),
                     semanticSearchProperties.candidateLimit(),
+                    semanticSearchProperties.chunkCandidateLimit(),
+                    semanticSearchProperties.hnswEfSearch(),
                     semanticSearchProperties.minimumSimilarity()
             );
         } catch (RuntimeException exception) {

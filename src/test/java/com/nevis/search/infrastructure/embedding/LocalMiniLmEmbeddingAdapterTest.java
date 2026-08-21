@@ -1,5 +1,6 @@
 package com.nevis.search.infrastructure.embedding;
 
+import com.nevis.search.application.embedding.EmbeddingModelCapabilities;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -8,26 +9,33 @@ class LocalMiniLmEmbeddingAdapterTest {
 
     @Test
     void embedsConceptuallyRelatedTextCloserThanAnUnrelatedDocument() {
-        LocalMiniLmEmbeddingAdapter embeddings = new LocalMiniLmEmbeddingAdapter();
+        EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities(
+                "all-MiniLM-L6-v2", 384, 510
+        );
+        LocalMiniLmEmbeddingAdapter embeddings = new LocalMiniLmEmbeddingAdapter(capabilities);
 
-        float[] query = embeddings.embed("evidence of where the customer lives");
-        float[] residenceEvidence = embeddings.embed("""
+        float[] query = embeddings.embedQuery("evidence of where the customer lives").values();
+        float[] residenceEvidence = embeddings.embedPassage("""
                 Monthly statement
 
                 The customer receives a monthly electricity statement for the apartment at 10 King Street.
-                """);
-        float[] recipe = embeddings.embed("""
+                """).values();
+        float[] recipe = embeddings.embedPassage("""
                 Cooking notes
 
                 The recipe uses olive oil, tomatoes, basil and pasta for dinner.
-                """);
+                """).values();
 
-        assertThat(query).hasSize(LocalMiniLmEmbeddingAdapter.DIMENSION);
+        assertThat(query).hasSize(capabilities.dimension());
         assertThat(cosine(query, residenceEvidence))
                 .isGreaterThan(0.30)
                 .isGreaterThan(cosine(query, recipe));
-        assertThat(cosine(embeddings.embed("zzzx qqqv non-existent search token"), residenceEvidence))
+        assertThat(cosine(
+                embeddings.embedQuery("zzzx qqqv non-existent search token").values(), residenceEvidence
+        ))
                 .isLessThan(0.30);
+        assertThat(embeddings.embedQuery("same input").values())
+                .containsExactly(embeddings.embedPassage("same input").values());
     }
 
     private double cosine(float[] left, float[] right) {

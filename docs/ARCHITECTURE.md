@@ -35,7 +35,7 @@ Document retrieval has three complementary branches:
 ```text
 normalized query
  ├─ PostgreSQL FTS + explicit search_term_mapping expansion
- └─ local embedding + pgvector cosine similarity
+ └─ local embedding + pgvector HNSW chunk search
                  ↓
        Weighted Reciprocal Rank Fusion
 ```
@@ -58,30 +58,37 @@ API key or separately managed model service. The model/native runtime are Maven 
 they are downloaded at build time; application startup initializes the local model and therefore
 uses additional CPU and memory.
 
-`V2__add_document_embeddings.sql` enables pgvector and adds `documents.embedding vector(384)`.
-New document writes must include an embedding. Existing rows from a V1-only deployment remain
-readable but need a deliberate reindex before they participate in semantic search.
+`V4__add_document_chunks.sql` replaces the obsolete document vector with `document_chunks`. Each
+row stores a chunk body and a `vector(384)` embedding, keyed by `(document_id, chunk_index)`, and an
+HNSW cosine index supports nearest-neighbour retrieval. Deleting a document cascades to its chunks.
+The migration deliberately does not backfill existing local data; changing the model requires a
+complete chunk rebuild, and changing vector dimension also requires a Flyway schema migration.
 
-When a document is created, `DocumentService` builds one deterministic semantic input:
+When a document is created, `DocumentService` preserves the complete supplied content in
+`documents`, but deterministically indexes paragraph-, sentence-, or token-bounded chunks. The title
+is capped at 32 model tokens and every embedding input is capped at 240 model-compatible tokens:
 
 ```text
 <title>
 
-<content>
+<chunk body>
 ```
 
-It generates the embedding before inserting the document, within the service transaction. An
-embedding failure therefore returns a server error instead of silently creating an unindexed
-document. Document content is preserved as supplied; it is not stripped before storage.
+Consecutive chunks contain up to 30 body tokens of overlap. Chunking and all embeddings complete
+synchronously before the document and chunks are batch-persisted in one transaction, so failures
+cannot leave a partially indexed document. Model metadata and token slicing are application ports;
+the MiniLM adapter exposes its 384 dimensions, 510-token capability, and matching tokenizer.
 
 ## Ranking and limits
 
-PostgreSQL uses exact cosine-distance scans (`<=>`) for the small take-home dataset. There is no
-ANN index yet; HNSW/IVFFlat becomes appropriate only after dataset size and latency measurements
-justify its operational cost.
+Semantic retrieval sets transaction-local `hnsw.ef_search=500`, asks the cosine HNSW index for the
+nearest 250 chunks, filters at provisional similarity `0.30`, and collapses them by document using
+the maximum chunk similarity. At most 50 semantic documents continue to RRF. HNSW is used because
+chunking materially increases vector cardinality; IVFFlat and a separate vector database remain
+out of scope.
 
-Both retrievers are bounded by `nevis.search.semantic.candidate-limit`. Semantic candidates must
-also meet `minimum-similarity`. Raw FTS and cosine scores are never added directly. Weighted RRF
+The lexical branch remains full-document FTS and is bounded by the 50-document candidate limit.
+Raw FTS and cosine scores are never added directly. Weighted RRF
 combines ranks while giving literal lexical matches a modest calibrated preference:
 
 ```text
@@ -89,29 +96,32 @@ score(document) = lexical-weight / (rrf-k + lexical-rank)
                 + vector-weight  / (rrf-k + vector-rank)
 ```
 
-Missing branches contribute zero. The evaluation-supported defaults are `minimum-similarity=0.30`,
-`candidate-limit=10`, `lexical-weight=1.25`, `vector-weight=1.0`, and `rrf-k=60`. The same document
-in both lists receives both contributions and is emitted once. Remaining ties are ordered by creation
-time and UUID, and the final document list is bounded by `nevis.search.max-results`.
+Missing branches contribute zero. The production baselines are `minimum-similarity=0.30`,
+document candidate limit 50, chunk candidate limit 250, `ef_search=500`, `lexical-weight=1.25`,
+`vector-weight=1.0`, and `rrf-k=60`. The same document in both lists receives both contributions and
+is emitted once. Remaining ties are ordered by creation time and UUID, and the final document list is
+bounded by `nevis.search.max-results`.
 If embedding/query vector retrieval fails during search, the service logs the failure and still
 returns lexical results.
 
 The evaluation profile exposes an internal diagnostic endpoint and the Python benchmark measures the
-real PostgreSQL adapters and packaged MiniLM model. It confirms that hybrid retrieval improves
-recall and ranking compared with either retriever alone; it also finds that a candidate limit of 10
-matches 20, 50, 100 and 200 on the current corpus. `minimum-similarity=0.30` preserves materially
-more relevant semantic results than thresholds which suppress negative-query noise. Full experiment
-results, per-query failures and limitations are recorded in `SEARCH_QUALITY_EVALUATION.md`.
+real PostgreSQL adapters and packaged embedding models. Its whole-document result that candidate limit
+10 matched larger limits, along with its score-gap recommendation, remains historical evidence only.
+`minimum-similarity=0.30`, chunk candidate limit 250, and `ef_search=500` are initial chunk-search
+baselines. Measurements made against one whole-document vector, including the old candidate-limit
+and score-gap recommendations, do not transfer to query-to-chunk score distributions and must be
+re-evaluated by the coordinated quality task. Historical results remain in
+`SEARCH_QUALITY_EVALUATION.md`.
 
 ## Runtime and tests
 
 Docker Compose uses the pinned `pgvector/pgvector:0.8.1-pg17` image and exposes only the API port.
 Testcontainers uses the same image for PostgreSQL integration tests. Unit tests cover query rules,
-the local embedding relation and RRF. Integration tests cover Flyway/pgvector persistence,
-semantic retrieval, FTS, term expansion and hybrid deduplication; the Python suite adds an HTTP
-semantic-search scenario.
+model-aware chunking, the local embedding relation and RRF. Integration tests cover
+Flyway/pgvector/HNSW persistence, chunk collapse, late-content semantic retrieval, FTS, term
+expansion and hybrid deduplication; the Python suite exercises the same behavior over HTTP.
 
-The main trade-offs are embedding CPU/startup cost, the need to reindex if the model changes, and
-semantic results being less deterministic than lexical matches. Keeping vectors in PostgreSQL is
-the simplest operational choice for this service; larger deployments may need ANN indexing or a
-dedicated retrieval system.
+The main trade-offs are synchronous multi-chunk embedding cost, the need to re-embed every chunk if
+the model or tokenizer changes, and provisional semantic thresholds. A larger model context is an
+upper bound rather than a reason to enlarge chunks automatically; chunk size, overlap and candidate
+settings remain evaluation parameters while the PostgreSQL/HNSW/FTS/RRF architecture stays stable.

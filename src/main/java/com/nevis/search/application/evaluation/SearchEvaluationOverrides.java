@@ -4,7 +4,9 @@ import com.nevis.search.application.HybridDocumentSearchMerger;
 import com.nevis.search.config.SemanticSearchProperties;
 
 public record SearchEvaluationOverrides(
-        Integer candidateLimit,
+        Integer documentCandidateLimit,
+        Integer chunkCandidateLimit,
+        Integer hnswEfSearch,
         Integer rrfK,
         Double minimumSimilarity,
         Double lexicalWeight,
@@ -13,7 +15,9 @@ public record SearchEvaluationOverrides(
 
     public SearchEvaluationParameters resolve(SemanticSearchProperties defaults) {
         return new SearchEvaluationParameters(
-                candidateLimit == null ? defaults.candidateLimit() : candidateLimit,
+                documentCandidateLimit == null ? defaults.candidateLimit() : documentCandidateLimit,
+                chunkCandidateLimit == null ? defaults.chunkCandidateLimit() : chunkCandidateLimit,
+                hnswEfSearch == null ? defaults.hnswEfSearch() : hnswEfSearch,
                 rrfK == null ? defaults.rrfK() : rrfK,
                 minimumSimilarity == null ? defaults.minimumSimilarity() : minimumSimilarity,
                 lexicalWeight == null ? defaults.lexicalWeight() : lexicalWeight,
@@ -22,7 +26,9 @@ public record SearchEvaluationOverrides(
     }
 
     public record SearchEvaluationParameters(
-            int candidateLimit,
+            int documentCandidateLimit,
+            int chunkCandidateLimit,
+            int hnswEfSearch,
             int rrfK,
             double minimumSimilarity,
             double lexicalWeight,
@@ -30,7 +36,8 @@ public record SearchEvaluationOverrides(
     ) {
 
         public SearchEvaluationParameters {
-            if (candidateLimit < 1 || rrfK < 1 || !Double.isFinite(minimumSimilarity)
+            if (documentCandidateLimit < 1 || chunkCandidateLimit < documentCandidateLimit
+                    || hnswEfSearch < chunkCandidateLimit || rrfK < 1 || !Double.isFinite(minimumSimilarity)
                     || minimumSimilarity < -1 || minimumSimilarity > 1
                     || !Double.isFinite(lexicalWeight) || lexicalWeight <= 0
                     || !Double.isFinite(vectorWeight) || vectorWeight <= 0) {
