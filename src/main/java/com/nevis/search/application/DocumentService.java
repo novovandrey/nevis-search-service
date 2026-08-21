@@ -5,12 +5,14 @@ import com.nevis.search.application.exception.InvalidRequestException;
 import com.nevis.search.application.port.ClientRepository;
 import com.nevis.search.application.port.DocumentRepository;
 import com.nevis.search.application.port.EmbeddingPort;
+import com.nevis.search.application.observability.DocumentMetrics;
 import com.nevis.search.config.DocumentProperties;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentChunk;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -23,35 +25,45 @@ public class DocumentService {
     private final EmbeddingPort embeddingPort;
     private final DocumentProperties documentProperties;
     private final DocumentChunker documentChunker;
+    private final DocumentMetrics metrics;
 
     public DocumentService(
             ClientRepository clientRepository,
             DocumentRepository documentRepository,
             EmbeddingPort embeddingPort,
             DocumentProperties documentProperties,
-            DocumentChunker documentChunker
+            DocumentChunker documentChunker,
+            DocumentMetrics metrics
     ) {
         this.clientRepository = clientRepository;
         this.documentRepository = documentRepository;
         this.embeddingPort = embeddingPort;
         this.documentProperties = documentProperties;
         this.documentChunker = documentChunker;
+        this.metrics = metrics;
     }
 
     @Transactional
     public Document create(UUID clientId, String title, String content) {
+        return metrics.recordCreate(() -> createDocument(clientId, title, content));
+    }
+
+    private Document createDocument(UUID clientId, String title, String content) {
         requireClient(clientId);
         if (content.length() > documentProperties.maxContentLength()) {
             throw new InvalidRequestException(
                     "Document content must not exceed " + documentProperties.maxContentLength() + " characters"
             );
         }
+        metrics.recordSizeBytes(content.getBytes(StandardCharsets.UTF_8).length);
         Document document = new Document(UUID.randomUUID(), clientId, title.strip(), content, Instant.now());
-        List<DocumentChunk> chunks = documentChunker.chunk(document.title(), document.content()).stream()
+        var chunkInputs = documentChunker.chunk(document.title(), document.content());
+        metrics.recordChunksCreated(chunkInputs.size());
+        List<DocumentChunk> chunks = metrics.recordEmbedding(() -> chunkInputs.stream()
                 .map(chunk -> new DocumentChunk(
                         chunk.index(), chunk.body(), embeddingPort.embedPassage(chunk.embeddingInput())
                 ))
-                .toList();
+                .toList());
         return documentRepository.save(document, chunks);
     }
 

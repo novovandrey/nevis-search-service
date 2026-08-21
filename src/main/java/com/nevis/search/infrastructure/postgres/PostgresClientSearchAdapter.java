@@ -32,14 +32,17 @@ public class PostgresClientSearchAdapter implements ClientSearchPort {
         return statement
                 .query((resultSet, rowNumber) -> {
                     Client client = PostgresClientRepository.mapClient(resultSet, rowNumber);
-                    return new ClientSearchResult(client);
+                    ClientSearchResult.MatchType matchType = resultSet.getInt("match_kind") == 0
+                            ? ClientSearchResult.MatchType.EXACT
+                            : ClientSearchResult.MatchType.FUZZY;
+                    return new ClientSearchResult(client, matchType);
                 })
                 .list();
     }
 
     private String exactSearchSql() {
         return """
-                SELECT id, first_name, last_name, email, country_of_residence
+                SELECT id, first_name, last_name, email, country_of_residence, 0 AS match_kind
                 FROM clients
                 WHERE company_search_key = :companyKey
                 ORDER BY last_name, first_name, id
@@ -68,7 +71,7 @@ public class PostgresClientSearchAdapter implements ClientSearchPort {
                     SELECT * FROM fuzzy_candidates
                     WHERE match_similarity >= :threshold
                 )
-                SELECT id, first_name, last_name, email, country_of_residence
+                SELECT id, first_name, last_name, email, country_of_residence, match_kind
                 FROM matches
                 ORDER BY match_kind, match_similarity DESC, last_name, first_name, id
                 """;

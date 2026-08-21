@@ -9,6 +9,7 @@ import com.nevis.search.application.QueryNormalizer;
 import com.nevis.search.application.SearchService;
 import com.nevis.search.application.embedding.EmbeddingModelCapabilities;
 import com.nevis.search.application.embedding.EmbeddingVector;
+import com.nevis.search.application.observability.DocumentMetrics;
 import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.ClientRepository;
 import com.nevis.search.application.port.DocumentRepository;
@@ -17,6 +18,7 @@ import com.nevis.search.application.port.EmbeddingPort;
 import com.nevis.search.application.port.SemanticDocumentSearchPort;
 import com.nevis.search.config.DocumentProperties;
 import com.nevis.search.domain.Client;
+import com.nevis.search.domain.ClientSearchResult;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentChunk;
 import com.nevis.search.domain.DocumentSearchResult;
@@ -115,6 +117,9 @@ class NevisPostgresIntegrationTest {
 
     @Autowired
     DocumentProperties documentProperties;
+
+    @Autowired
+    DocumentMetrics documentMetrics;
 
     @Autowired
     EmbeddingModelCapabilities embeddingModelCapabilities;
@@ -277,7 +282,8 @@ class NevisPostgresIntegrationTest {
                     }
                 },
                 documentProperties,
-                documentChunker
+                documentChunker,
+                documentMetrics
         );
         assertThatThrownBy(() -> failingService.create(
                 client.id(), "Long document", ("first semantic section. ".repeat(250))
@@ -372,7 +378,10 @@ class NevisPostgresIntegrationTest {
                     .doesNotContain(microsoft.id(), localPart.id());
         }
 
-        List<UUID> fuzzyIds = clientSearchPort.search(clientSearchQueryNormalizer.normalize("Hewlett Packard"))
+        List<ClientSearchResult> fuzzyResults = clientSearchPort.search(
+                clientSearchQueryNormalizer.normalize("Hewlett Packard")
+        );
+        List<UUID> fuzzyIds = fuzzyResults
                 .stream()
                 .map(result -> result.client().id())
                 .toList();
@@ -384,6 +393,14 @@ class NevisPostgresIntegrationTest {
                 .single();
         assertThat(fuzzyIds.getFirst()).isEqualTo(exact.id());
         assertThat(fuzzyIds).contains(fuzzyExtraCharacter.id(), fuzzyMissingCharacter.id());
+        assertThat(fuzzyResults.stream()
+                .filter(result -> result.client().id().equals(exact.id()))
+                .map(ClientSearchResult::matchType))
+                .containsExactly(ClientSearchResult.MatchType.EXACT);
+        assertThat(fuzzyResults.stream()
+                .filter(result -> result.client().id().equals(fuzzyExtraCharacter.id()))
+                .map(ClientSearchResult::matchType))
+                .containsExactly(ClientSearchResult.MatchType.FUZZY);
         if (extraSimilarity > missingSimilarity) {
             assertThat(fuzzyIds.indexOf(fuzzyExtraCharacter.id()))
                     .isLessThan(fuzzyIds.indexOf(fuzzyMissingCharacter.id()));
@@ -400,6 +417,38 @@ class NevisPostgresIntegrationTest {
         assertThat(clientSearchPort.search(clientSearchQueryNormalizer.normalize("he")))
                 .extracting(result -> result.client().id())
                 .containsExactly(shortExact.id());
+    }
+
+    @Test
+    void exposesHealthAndRepresentativePrometheusMetrics() throws Exception {
+        Client client = clientService.create("Metrics", "Client", "metrics@observability.example", null);
+        documentService.create(client.id(), "Metrics document", "Operational search telemetry");
+        searchService.search("operational telemetry");
+
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+
+        String scrape = mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(scrape).contains(
+                "search_requests_total",
+                "search_latency_seconds_count",
+                "search_fts_latency_seconds_count",
+                "search_semantic_latency_seconds_count",
+                "search_embedding_latency_seconds_count",
+                "search_lexical_candidates_count",
+                "search_semantic_candidates_count",
+                "document_create_requests_total",
+                "document_create_latency_seconds_count",
+                "document_size_bytes_count",
+                "document_chunks_count",
+                "document_embedding_latency_seconds_count"
+        );
     }
 
     @Test

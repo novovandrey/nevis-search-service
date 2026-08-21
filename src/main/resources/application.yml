@@ -16,6 +16,12 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
 nevis:
   search:
     max-query-length: ${MAX_QUERY_LENGTH:255}

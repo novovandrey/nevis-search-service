@@ -4,6 +4,7 @@ import com.nevis.search.application.embedding.EmbeddingModelCapabilities;
 import com.nevis.search.application.embedding.EmbeddingVector;
 import com.nevis.search.application.exception.ClientNotFoundException;
 import com.nevis.search.application.exception.InvalidRequestException;
+import com.nevis.search.application.observability.DocumentMetrics;
 import com.nevis.search.application.port.ClientRepository;
 import com.nevis.search.application.port.DocumentRepository;
 import com.nevis.search.application.port.EmbeddingTokenizerPort;
@@ -13,6 +14,7 @@ import com.nevis.search.config.DocumentProperties;
 import com.nevis.search.domain.Client;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentChunk;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -51,6 +53,7 @@ class DocumentServiceTest {
     void doesNotPersistDocumentWhenEmbeddingGenerationFails() {
         UUID clientId = UUID.randomUUID();
         AtomicBoolean saved = new AtomicBoolean();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ClientRepository clients = clientRepository(clientId);
         DocumentRepository documents = (document, chunks) -> {
             saved.set(true);
@@ -59,13 +62,39 @@ class DocumentServiceTest {
         DocumentService service = new DocumentService(
                 clients, documents, passageEmbeddings(text -> {
                     throw new IllegalStateException("Embedding unavailable");
-                }), new DocumentProperties(1_000), chunker()
+                }), new DocumentProperties(1_000), chunker(),
+                new DocumentMetrics(registry, new DocumentProperties(1_000))
         );
 
         assertThatThrownBy(() -> service.create(clientId, "Title", "Content"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Embedding unavailable");
         assertThat(saved).isFalse();
+        assertThat(registry.get("document.create.requests").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("document.create.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("document.embedding.latency").timer().count()).isEqualTo(1L);
+    }
+
+    @Test
+    void recordsUtf8SizeChunkCountAndOneEmbeddingObservationPerDocument() {
+        UUID clientId = UUID.randomUUID();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        DocumentService service = new DocumentService(
+                clientRepository(clientId),
+                (document, chunks) -> document,
+                passageEmbeddings(text -> EmbeddingVector.of(new float[384], capabilities())),
+                new DocumentProperties(1_000),
+                chunker(),
+                new DocumentMetrics(registry, new DocumentProperties(1_000))
+        );
+
+        service.create(clientId, "Title", "€x");
+
+        assertThat(registry.get("document.create.requests").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("document.create.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("document.size.bytes").summary().totalAmount()).isEqualTo(4.0);
+        assertThat(registry.get("document.chunks.created").summary().totalAmount()).isEqualTo(1.0);
+        assertThat(registry.get("document.embedding.latency").timer().count()).isEqualTo(1L);
     }
 
     private DocumentService service(UUID knownClientId, int contentLimit) {
@@ -82,7 +111,8 @@ class DocumentServiceTest {
                 documents,
                 passageEmbeddings(text -> EmbeddingVector.of(new float[384], capabilities())),
                 new DocumentProperties(contentLimit),
-                chunker()
+                chunker(),
+                new DocumentMetrics(new SimpleMeterRegistry(), new DocumentProperties(contentLimit))
         );
     }
 

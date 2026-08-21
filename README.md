@@ -47,6 +47,23 @@ Pure application tests run directly. Database, vector-search, migration, isolati
 integration tests use a real pinned pgvector PostgreSQL image through Testcontainers; Docker must
 be available for those tests. H2 is intentionally not used.
 
+## Observability
+
+The service exposes only the following Spring Boot Actuator endpoints:
+
+- `GET /actuator/health` for application health;
+- `GET /actuator/prometheus` for Prometheus-compatible metrics.
+
+Custom metrics cover search traffic and complete latency, zero-result rate, client-company exact,
+fuzzy, and no-match behavior, lexical and semantic candidate volumes, FTS, semantic, and query
+embedding latency, plus document size, chunks per document, and document embedding/indexing latency.
+When a client search returns both exact and fuzzy matches, both path counters increment once for that
+request; this reflects the existing result set without changing its ranking.
+
+These online metrics are operational and search-quality proxies. Metrics such as Recall@10,
+Precision@10, MRR and NDCG require relevance judgments and remain part of the offline search-quality
+evaluation rather than production request metrics.
+
 ## Example workflow
 
 Create a client:

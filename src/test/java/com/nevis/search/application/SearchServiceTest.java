@@ -2,6 +2,7 @@ package com.nevis.search.application;
 
 import com.nevis.search.application.embedding.EmbeddingModelCapabilities;
 import com.nevis.search.application.embedding.EmbeddingVector;
+import com.nevis.search.application.observability.SearchMetrics;
 import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.DocumentSearchPort;
 import com.nevis.search.application.port.EmbeddingPort;
@@ -13,6 +14,7 @@ import com.nevis.search.domain.ClientSearchQuery;
 import com.nevis.search.domain.ClientSearchResult;
 import com.nevis.search.domain.Document;
 import com.nevis.search.domain.DocumentSearchResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -27,6 +29,7 @@ class SearchServiceTest {
 
     @Test
     void orchestratesLexicalAndSemanticDocumentSearch() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SearchProperties properties = new SearchProperties(255, 50);
         SemanticSearchProperties semanticProperties = new SemanticSearchProperties(
                 50, 250, 500, 60, 0.30, 1.25, 1.0
@@ -41,7 +44,7 @@ class SearchServiceTest {
         AtomicReference<ClientSearchQuery> capturedClientQuery = new AtomicReference<>();
         ClientSearchPort clientSearch = query -> {
             capturedClientQuery.set(query);
-            return List.of(new ClientSearchResult(client));
+            return List.of(new ClientSearchResult(client, ClientSearchResult.MatchType.EXACT));
         };
         AtomicReference<Set<String>> capturedTerms = new AtomicReference<>();
         DocumentSearchPort documentSearch = (terms, limit) -> {
@@ -56,7 +59,8 @@ class SearchServiceTest {
         EmbeddingPort embeddings = queryEmbeddings(capabilities, embeddedQuery);
         SearchService service = new SearchService(
                 normalizer, clientNormalizer, expander, clientSearch, documentSearch,
-                semanticSearch, embeddings, new HybridDocumentSearchMerger(semanticProperties, properties), semanticProperties
+                semanticSearch, embeddings, new HybridDocumentSearchMerger(semanticProperties, properties),
+                semanticProperties, new SearchMetrics(registry, semanticProperties)
         );
 
         SearchService.GlobalSearchResults result = service.search("Address Proof");
@@ -66,10 +70,20 @@ class SearchServiceTest {
         assertThat(capturedClientQuery.get().value()).isEqualTo("addressproof");
         assertThat(capturedTerms.get()).containsExactlyInAnyOrder("address proof", "utility bill");
         assertThat(embeddedQuery).hasValue("address proof");
+        assertThat(registry.get("search.requests").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("search.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("search.fts.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("search.semantic.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("search.embedding.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("search.results").summary().totalAmount()).isEqualTo(2.0);
+        assertThat(registry.get("search.lexical.candidates").summary().totalAmount()).isEqualTo(1.0);
+        assertThat(registry.get("search.semantic.candidates").summary().count()).isEqualTo(1L);
+        assertThat(registry.get("client.search.exact.match").counter().count()).isEqualTo(1.0);
     }
 
     @Test
     void returnsLexicalDocumentsWhenSemanticSearchFails() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SearchProperties properties = new SearchProperties(255, 50);
         SemanticSearchProperties semanticProperties = new SemanticSearchProperties(
                 50, 250, 500, 60, 0.30, 1.25, 1.0
@@ -90,12 +104,61 @@ class SearchServiceTest {
                 },
                 queryEmbeddings(capabilities, new AtomicReference<>()),
                 new HybridDocumentSearchMerger(semanticProperties, properties),
-                semanticProperties
+                semanticProperties,
+                new SearchMetrics(registry, semanticProperties)
         );
 
         assertThat(service.search("passport").documents())
                 .extracting(DocumentSearchResult::document)
                 .containsExactly(document);
+        assertThat(registry.get("search.semantic.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("search.embedding.latency").timer().count()).isEqualTo(1L);
+        assertThat(registry.get("search.semantic.candidates").summary().count()).isEqualTo(1L);
+        assertThat(registry.get("search.semantic.candidates").summary().totalAmount()).isZero();
+    }
+
+    @Test
+    void recordsExactFuzzyCombinedAndNoClientMatchPathsOncePerSearch() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        SearchProperties properties = new SearchProperties(255, 50);
+        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(
+                50, 250, 500, 60, 0.30, 1.25, 1.0
+        );
+        Client exact = new Client(UUID.randomUUID(), "Exact", "Client", "exact@example.com", null);
+        Client fuzzy = new Client(UUID.randomUUID(), "Fuzzy", "Client", "fuzzy@example.com", null);
+        ClientSearchPort clientSearch = query -> switch (query.value()) {
+            case "exact" -> List.of(new ClientSearchResult(exact, ClientSearchResult.MatchType.EXACT));
+            case "fuzzy" -> List.of(new ClientSearchResult(fuzzy, ClientSearchResult.MatchType.FUZZY));
+            case "both" -> List.of(
+                    new ClientSearchResult(exact, ClientSearchResult.MatchType.EXACT),
+                    new ClientSearchResult(fuzzy, ClientSearchResult.MatchType.FUZZY)
+            );
+            default -> List.of();
+        };
+        EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities("test", 384, 510);
+        SearchService service = new SearchService(
+                new QueryNormalizer(properties),
+                new ClientSearchQueryNormalizer(properties),
+                new QueryExpander(query -> Set.of()),
+                clientSearch,
+                (terms, limit) -> List.of(),
+                (embedding, documentLimit, chunkLimit, efSearch, minimumSimilarity) -> List.of(),
+                queryEmbeddings(capabilities, new AtomicReference<>()),
+                new HybridDocumentSearchMerger(semanticProperties, properties),
+                semanticProperties,
+                new SearchMetrics(registry, semanticProperties)
+        );
+
+        service.search("exact");
+        service.search("fuzzy");
+        service.search("both");
+        service.search("none");
+
+        assertThat(registry.get("search.requests").counter().count()).isEqualTo(4.0);
+        assertThat(registry.get("client.search.exact.match").counter().count()).isEqualTo(2.0);
+        assertThat(registry.get("client.search.fuzzy.match").counter().count()).isEqualTo(2.0);
+        assertThat(registry.get("client.search.no.match").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("search.zero.results").counter().count()).isEqualTo(1.0);
     }
 
     private EmbeddingPort queryEmbeddings(

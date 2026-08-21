@@ -4,7 +4,9 @@ import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.DocumentSearchPort;
 import com.nevis.search.application.port.EmbeddingPort;
 import com.nevis.search.application.port.SemanticDocumentSearchPort;
+import com.nevis.search.application.observability.SearchMetrics;
 import com.nevis.search.config.SemanticSearchProperties;
+import com.nevis.search.domain.ClientSearchQuery;
 import com.nevis.search.domain.ClientSearchResult;
 import com.nevis.search.domain.DocumentSearchResult;
 import com.nevis.search.domain.SearchQuery;
@@ -30,6 +32,7 @@ public class SearchService {
     private final EmbeddingPort embeddingPort;
     private final HybridDocumentSearchMerger hybridDocumentSearchMerger;
     private final SemanticSearchProperties semanticSearchProperties;
+    private final SearchMetrics metrics;
 
     public SearchService(
             QueryNormalizer queryNormalizer,
@@ -40,7 +43,8 @@ public class SearchService {
             SemanticDocumentSearchPort semanticDocumentSearchPort,
             EmbeddingPort embeddingPort,
             HybridDocumentSearchMerger hybridDocumentSearchMerger,
-            SemanticSearchProperties semanticSearchProperties
+            SemanticSearchProperties semanticSearchProperties,
+            SearchMetrics metrics
     ) {
         this.queryNormalizer = queryNormalizer;
         this.clientSearchQueryNormalizer = clientSearchQueryNormalizer;
@@ -51,32 +55,40 @@ public class SearchService {
         this.embeddingPort = embeddingPort;
         this.hybridDocumentSearchMerger = hybridDocumentSearchMerger;
         this.semanticSearchProperties = semanticSearchProperties;
+        this.metrics = metrics;
     }
 
     public GlobalSearchResults search(String rawQuery) {
-        Instant startedAt = Instant.now();
         SearchQuery query = queryNormalizer.normalize(rawQuery);
-        List<ClientSearchResult> clients = clientSearchPort.search(
-                clientSearchQueryNormalizer.normalize(rawQuery)
-        );
-        List<DocumentSearchResult> lexicalDocuments = documentSearchPort.search(
+        ClientSearchQuery clientQuery = clientSearchQueryNormalizer.normalize(rawQuery);
+        return metrics.recordSearch(() -> executeSearch(query, clientQuery));
+    }
+
+    private GlobalSearchResults executeSearch(SearchQuery query, ClientSearchQuery clientQuery) {
+        Instant startedAt = Instant.now();
+        List<ClientSearchResult> clients = clientSearchPort.search(clientQuery);
+        metrics.recordClientMatches(clients);
+        List<DocumentSearchResult> lexicalDocuments = metrics.recordFts(() -> documentSearchPort.search(
                 queryExpander.expand(query), semanticSearchProperties.candidateLimit()
-        );
+        ));
+        metrics.recordLexicalCandidates(lexicalDocuments.size());
         List<DocumentSearchResult> semanticDocuments = semanticSearch(query);
+        metrics.recordSemanticCandidates(semanticDocuments.size());
         List<DocumentSearchResult> documents = hybridDocumentSearchMerger.merge(lexicalDocuments, semanticDocuments);
+        metrics.recordResults(clients.size() + documents.size());
         log.debug("Global search completed in {} ms", Duration.between(startedAt, Instant.now()).toMillis());
         return new GlobalSearchResults(clients, documents);
     }
 
     private List<DocumentSearchResult> semanticSearch(SearchQuery query) {
         try {
-            return semanticDocumentSearchPort.search(
-                    embeddingPort.embedQuery(query.value()),
+            return metrics.recordSemantic(() -> semanticDocumentSearchPort.search(
+                    metrics.recordQueryEmbedding(() -> embeddingPort.embedQuery(query.value())),
                     semanticSearchProperties.candidateLimit(),
                     semanticSearchProperties.chunkCandidateLimit(),
                     semanticSearchProperties.hnswEfSearch(),
                     semanticSearchProperties.minimumSimilarity()
-            );
+            ));
         } catch (RuntimeException exception) {
             log.warn("Semantic document search failed; returning lexical results only", exception);
             return List.of();
