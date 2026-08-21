@@ -124,14 +124,19 @@ class EvaluationPostgresIntegrationTest {
         EmbeddingVector query = embeddingPort.embedQuery("plan query");
         String queryVector = vectorLiteral(query);
 
+        jdbcClient.sql("DROP INDEX document_chunks_embedding_hnsw_idx").update();
         jdbcClient.sql("""
                         INSERT INTO document_chunks (document_id, chunk_index, content, embedding)
                         SELECT :documentId, value, 'scale chunk ' || value, CAST(:embedding AS vector)
-                        FROM generate_series(1, 5000) AS value
+                        FROM generate_series(1, 50000) AS value
                         """)
                 .param("documentId", document.id())
                 .param("embedding", queryVector)
                 .update();
+        jdbcClient.sql("""
+                CREATE INDEX document_chunks_embedding_hnsw_idx
+                ON document_chunks USING hnsw (embedding vector_cosine_ops)
+                """).update();
         jdbcClient.sql("ANALYZE document_chunks").update();
 
         String exactPlan = evaluationSemanticSearch.explain(query, SemanticRetrievalMode.EXACT, 250, 500);
@@ -139,7 +144,7 @@ class EvaluationPostgresIntegrationTest {
 
         assertThat(exactPlan).doesNotContain("document_chunks_embedding_hnsw_idx");
         assertThat(hnswPlan).contains("document_chunks_embedding_hnsw_idx");
-        assertThat(metadataService.metadata().database().chunkCount()).isEqualTo(5001);
+        assertThat(metadataService.metadata().database().chunkCount()).isEqualTo(50001);
         assertThat(metadataService.metadata().database().hnswIndexBytes()).isPositive();
     }
 
