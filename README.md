@@ -155,7 +155,9 @@ contract does not require that rule.
 ### `POST /clients/{id}/documents`
 
 Creates a text document for an existing client. `title` and `content` are required. An unknown
-client returns `404`; invalid input returns `400`.
+client returns `404`; invalid input returns `400`. Content is limited to 50,000 characters by
+default. The response contains the complete stored content even though semantic indexing uses
+internal chunks.
 
 ### `GET /search?q={query}`
 
@@ -197,19 +199,25 @@ Validation and failures use a consistent response shape:
 | `MAX_QUERY_LENGTH` | `255` | Maximum normalized query length |
 | `MAX_SEARCH_RESULTS` | `50` | Maximum merged document results |
 | `CLIENT_TRIGRAM_SIMILARITY_THRESHOLD` | `0.50` | Minimum `pg_trgm` similarity for fuzzy client-company matches |
-| `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum candidates from each retrieval branch |
+| `SEMANTIC_CANDIDATE_LIMIT` | `50` | Maximum lexical and collapsed semantic document candidates |
+| `SEMANTIC_CHUNK_CANDIDATE_LIMIT` | `250` | HNSW chunks retrieved before document collapse |
+| `SEMANTIC_HNSW_EF_SEARCH` | `500` | Transaction-local HNSW search breadth |
 | `SEMANTIC_RRF_K` | `60` | Reciprocal Rank Fusion constant |
 | `SEMANTIC_MINIMUM_SIMILARITY` | `0.30` | Minimum cosine similarity for semantic candidates |
 | `SEMANTIC_LEXICAL_WEIGHT` | `1.25` | Weighted RRF contribution from the lexical ranking |
 | `SEMANTIC_VECTOR_WEIGHT` | `1.0` | Weighted RRF contribution from the semantic ranking |
-| `MAX_DOCUMENT_CONTENT_LENGTH` | `1000000` | Maximum document content length |
+| `MAX_DOCUMENT_CONTENT_LENGTH` | `50000` | Maximum document content length |
+| `DOCUMENT_CHUNK_MAX_INPUT_TOKENS` | `240` | Maximum title-plus-body embedding input |
+| `DOCUMENT_CHUNK_MAX_TITLE_TOKENS` | `32` | Maximum title contribution to each chunk |
+| `DOCUMENT_CHUNK_OVERLAP_TOKENS` | `30` | Maximum body context copied to the next chunk |
 
 ## Architecture decisions
 
 - PostgreSQL is the source of truth. A generated, weighted `tsvector` plus pgvector support hybrid
   document retrieval without a second datastore.
-- `all-MiniLM-L6-v2` runs locally through ONNX and returns 384-dimensional embeddings. Its Maven
-  dependencies are downloaded during the build; no external API key is required.
+- `all-MiniLM-L6-v2` runs locally through ONNX and returns 384-dimensional embeddings. Documents
+  are indexed as model-token-aware chunks in PostgreSQL and searched through a cosine HNSW index;
+  FTS remains full-document and semantic chunks collapse back to documents before RRF.
 - CRUD repositories, `ClientSearchPort`, `DocumentSearchPort`, `SemanticDocumentSearchPort`,
   `EmbeddingPort`, and `QueryExpansionPort` are separate capabilities. PostgreSQL SQL, `tsquery`,
   vector operators, and mapping-table details stay in infrastructure adapters.
@@ -239,8 +247,9 @@ Validation and failures use a consistent response shape:
 - Company-key extraction intentionally removes only the final suffix. Consequently,
   `user@sub.company.co.uk` produces `sub.company.co`; no public-suffix list or subdomain interpretation is
   introduced. The email local part and substring matching are deliberately excluded.
-- A dedicated engine or ANN pgvector index becomes justified when search scale, latency, filters,
-  analyzers, or operational requirements exceed exact PostgreSQL retrieval.
+- HNSW is justified by the higher vector cardinality introduced by chunking. A dedicated vector
+  engine remains unnecessary until scale, filters, analyzers, or operational requirements exceed
+  PostgreSQL.
 
 ## Non-goals
 

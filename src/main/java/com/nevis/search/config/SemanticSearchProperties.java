@@ -5,6 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("nevis.search.semantic")
 public record SemanticSearchProperties(
         int candidateLimit,
+        int chunkCandidateLimit,
+        int hnswEfSearch,
         int rrfK,
         double minimumSimilarity,
         double lexicalWeight,
@@ -12,7 +14,8 @@ public record SemanticSearchProperties(
 ) {
 
     public SemanticSearchProperties {
-        if (candidateLimit < 1 || rrfK < 1 || !Double.isFinite(minimumSimilarity)
+        if (candidateLimit < 1 || chunkCandidateLimit < candidateLimit || hnswEfSearch < chunkCandidateLimit
+                || rrfK < 1 || !Double.isFinite(minimumSimilarity)
                 || minimumSimilarity < -1 || minimumSimilarity > 1
                 || !Double.isFinite(lexicalWeight) || lexicalWeight <= 0
                 || !Double.isFinite(vectorWeight) || vectorWeight <= 0) {

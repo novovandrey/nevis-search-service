@@ -73,6 +73,8 @@ public class SearchService {
             return semanticDocumentSearchPort.search(
                     embeddingPort.embed(query.value()),
                     semanticSearchProperties.candidateLimit(),
+                    semanticSearchProperties.chunkCandidateLimit(),
+                    semanticSearchProperties.hnswEfSearch(),
                     semanticSearchProperties.minimumSimilarity()
             );
         } catch (RuntimeException exception) {

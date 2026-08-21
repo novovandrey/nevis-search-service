@@ -2,16 +2,23 @@ package com.nevis.search;
 
 import com.nevis.search.application.ClientService;
 import com.nevis.search.application.ClientSearchQueryNormalizer;
+import com.nevis.search.application.DocumentChunker;
 import com.nevis.search.application.DocumentService;
 import com.nevis.search.application.QueryExpander;
 import com.nevis.search.application.QueryNormalizer;
 import com.nevis.search.application.SearchService;
+import com.nevis.search.application.embedding.EmbeddingModelCapabilities;
+import com.nevis.search.application.embedding.EmbeddingVector;
 import com.nevis.search.application.port.ClientSearchPort;
+import com.nevis.search.application.port.ClientRepository;
+import com.nevis.search.application.port.DocumentRepository;
 import com.nevis.search.application.port.DocumentSearchPort;
 import com.nevis.search.application.port.EmbeddingPort;
 import com.nevis.search.application.port.SemanticDocumentSearchPort;
+import com.nevis.search.config.DocumentProperties;
 import com.nevis.search.domain.Client;
 import com.nevis.search.domain.Document;
+import com.nevis.search.domain.DocumentChunk;
 import com.nevis.search.domain.DocumentSearchResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +27,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,9 +37,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -94,11 +105,29 @@ class NevisPostgresIntegrationTest {
     EmbeddingPort embeddingPort;
 
     @Autowired
+    ClientRepository clientRepository;
+
+    @Autowired
+    DocumentRepository documentRepository;
+
+    @Autowired
+    DocumentChunker documentChunker;
+
+    @Autowired
+    DocumentProperties documentProperties;
+
+    @Autowired
+    EmbeddingModelCapabilities embeddingModelCapabilities;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
+    @Autowired
     MockMvc mockMvc;
 
     @BeforeEach
     void cleanDatabase() {
-        jdbcClient.sql("TRUNCATE TABLE documents, clients").update();
+        jdbcClient.sql("TRUNCATE TABLE document_chunks, documents, clients").update();
     }
 
     @Test
@@ -170,11 +199,34 @@ class NevisPostgresIntegrationTest {
                 .single();
 
         assertThat(vector).contains("'util'", "'bill'", "'residenti'", "'address'");
-        assertThat(jdbcClient.sql("SELECT vector_dims(embedding) FROM documents WHERE id = :id")
+        assertThat(jdbcClient.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public'
+                              AND table_name = 'documents'
+                              AND column_name = 'embedding'
+                        )
+                        """).query(Boolean.class).single()).isFalse();
+        assertThat(jdbcClient.sql("""
+                        SELECT indexname
+                        FROM pg_indexes
+                        WHERE schemaname = 'public' AND tablename = 'document_chunks'
+                        """).query(String.class).list())
+                .contains("document_chunks_pkey", "document_chunks_embedding_hnsw_idx");
+        assertThat(jdbcClient.sql("""
+                        SELECT vector_dims(embedding)
+                        FROM document_chunks
+                        WHERE document_id = :id
+                        """)
                 .param("id", document.id())
                 .query(Integer.class)
                 .single())
                 .isEqualTo(384);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
+                .param("id", document.id())
+                .query(Long.class)
+                .single())
+                .isEqualTo(1L);
         assertThatThrownBy(() -> jdbcClient.sql("""
                         INSERT INTO documents (id, client_id, title, content, created_at)
                         VALUES (:id, :clientId, 'Invalid', 'Invalid', now())
@@ -183,6 +235,88 @@ class NevisPostgresIntegrationTest {
                 .param("clientId", UUID.randomUUID())
                 .update())
                 .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void documentAndChunksAreAtomicAndChunksCascadeOnDelete() {
+        Client client = clientService.create("Atomic", "Tester", "atomic@example.com", null);
+        Document manual = new Document(
+                UUID.randomUUID(), client.id(), "Atomic document", "Body", Instant.now()
+        );
+        EmbeddingVector vector = embeddingPort.embed("Atomic document\n\nBody");
+        List<DocumentChunk> duplicateChunks = List.of(
+                new DocumentChunk(0, "first", vector),
+                new DocumentChunk(0, "duplicate", vector)
+        );
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        assertThatThrownBy(() -> transaction.executeWithoutResult(
+                ignored -> documentRepository.save(manual, duplicateChunks)
+        )).isInstanceOf(DataAccessException.class);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM documents WHERE id = :id")
+                .param("id", manual.id()).query(Long.class).single()).isZero();
+        assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
+                .param("id", manual.id()).query(Long.class).single()).isZero();
+
+        AtomicInteger embeddingCalls = new AtomicInteger();
+        DocumentService failingService = new DocumentService(
+                clientRepository,
+                documentRepository,
+                text -> {
+                    if (embeddingCalls.incrementAndGet() == 2) {
+                        throw new IllegalStateException("Embedding unavailable");
+                    }
+                    return EmbeddingVector.of(new float[384], embeddingModelCapabilities);
+                },
+                documentProperties,
+                documentChunker
+        );
+        assertThatThrownBy(() -> failingService.create(
+                client.id(), "Long document", ("first semantic section. ".repeat(250))
+        )).isInstanceOf(IllegalStateException.class)
+                .hasMessage("Embedding unavailable");
+        assertThat(jdbcClient.sql("SELECT count(*) FROM documents WHERE client_id = :clientId")
+                .param("clientId", client.id()).query(Long.class).single()).isZero();
+
+        Document persisted = documentService.create(
+                client.id(), "Cascade", "first paragraph ".repeat(300)
+        );
+        assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
+                .param("id", persisted.id()).query(Long.class).single()).isGreaterThan(1L);
+        jdbcClient.sql("DELETE FROM documents WHERE id = :id").param("id", persisted.id()).update();
+        assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
+                .param("id", persisted.id()).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void chunkSearchFindsLateContentAndCollapsesToBestChunkScore() {
+        Client client = clientService.create("Chunk", "Tester", "chunks@example.com", null);
+        String earlyFiller = "Cooking recipes discuss tomatoes basil pasta and olive oil. ".repeat(80);
+        String relevantTail = "The customer receives an electricity statement for the apartment at 10 King Street.";
+        Document document = documentService.create(
+                client.id(), "Archived notes", earlyFiller + "\n\n" + relevantTail
+        );
+        assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
+                .param("id", document.id()).query(Long.class).single()).isGreaterThan(1L);
+
+        EmbeddingVector query = embeddingPort.embed("evidence of where the customer lives");
+        List<DocumentSearchResult> results = semanticDocumentSearchPort.search(query, 50, 250, 500, 0.30);
+
+        assertThat(results).extracting(result -> result.document().id()).containsOnlyOnce(document.id());
+        DocumentSearchResult result = results.stream()
+                .filter(candidate -> candidate.document().id().equals(document.id()))
+                .findFirst()
+                .orElseThrow();
+        double bestChunkSimilarity = jdbcClient.sql("""
+                        SELECT MAX(1 - (embedding <=> CAST(:embedding AS vector)))
+                        FROM document_chunks
+                        WHERE document_id = :documentId
+                        """)
+                .param("embedding", vectorLiteral(query))
+                .param("documentId", document.id())
+                .query(Double.class)
+                .single();
+        assertThat(result.relevance()).isCloseTo(bestChunkSimilarity, org.assertj.core.data.Offset.offset(0.000001));
     }
 
     @Test
@@ -346,7 +480,9 @@ class NevisPostgresIntegrationTest {
         assertThat(queryExpander.expand(queryNormalizer.normalize(query))).containsExactly(query);
         assertThat(documentSearchPort.search(Set.of(query), 50)).isEmpty();
 
-        List<DocumentSearchResult> semanticResults = semanticDocumentSearchPort.search(embeddingPort.embed(query), 1, 0.30);
+        List<DocumentSearchResult> semanticResults = semanticDocumentSearchPort.search(
+                embeddingPort.embed(query), 1, 250, 500, 0.30
+        );
 
         assertThat(semanticResults).extracting(result -> result.document().id())
                 .containsExactly(electricityStatement.id());
@@ -363,7 +499,7 @@ class NevisPostgresIntegrationTest {
 
         assertThat(documentSearchPort.search(Set.of("passport"), 50))
                 .extracting(result -> result.document().id()).contains(document.id());
-        assertThat(semanticDocumentSearchPort.search(embeddingPort.embed("passport"), 50, 0.30))
+        assertThat(semanticDocumentSearchPort.search(embeddingPort.embed("passport"), 50, 250, 500, 0.30))
                 .extracting(result -> result.document().id()).contains(document.id());
         assertThat(searchService.search("passport").documents())
                 .extracting(result -> result.document().id()).containsOnlyOnce(document.id());
@@ -644,5 +780,17 @@ class NevisPostgresIntegrationTest {
                 .andExpect(jsonPath("$.paths['/search'].get.parameters.length()").value(1))
                 .andExpect(jsonPath("$.paths['/search'].get.parameters[0].name").value("q"))
                 .andExpect(jsonPath("$.paths['/search'].get.parameters[0].schema.maxLength").value(255));
+    }
+
+    private String vectorLiteral(EmbeddingVector vector) {
+        StringBuilder literal = new StringBuilder("[");
+        float[] values = vector.values();
+        for (int index = 0; index < values.length; index++) {
+            if (index > 0) {
+                literal.append(',');
+            }
+            literal.append(values[index]);
+        }
+        return literal.append(']').toString();
     }
 }

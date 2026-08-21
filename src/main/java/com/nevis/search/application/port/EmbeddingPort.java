@@ -1,6 +1,8 @@
 package com.nevis.search.application.port;
 
+import com.nevis.search.application.embedding.EmbeddingVector;
+
 public interface EmbeddingPort {
 
-    float[] embed(String text);
+    EmbeddingVector embed(String text);
 }

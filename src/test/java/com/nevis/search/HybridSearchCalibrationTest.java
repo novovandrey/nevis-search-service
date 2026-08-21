@@ -197,7 +197,7 @@ class HybridSearchCalibrationTest {
                     queryExpander.expand(queryNormalizer.normalize(query)), CANDIDATE_LIMIT
             );
             List<DocumentSearchResult> semantic = semanticDocumentSearchPort.search(
-                    embeddingPort.embed(query), CANDIDATE_LIMIT, -1.0
+                    embeddingPort.embed(query), CANDIDATE_LIMIT, 250, 500, -1.0
             );
             retrievals.put(query, new Retrieval(lexical, semantic));
         }
@@ -211,7 +211,7 @@ class HybridSearchCalibrationTest {
             double lexicalWeight
     ) {
         HybridDocumentSearchMerger merger = new HybridDocumentSearchMerger(
-                new SemanticSearchProperties(CANDIDATE_LIMIT, RRF_K, threshold, lexicalWeight, 1.0),
+                new SemanticSearchProperties(CANDIDATE_LIMIT, 250, 500, RRF_K, threshold, lexicalWeight, 1.0),
                 new SearchProperties(255, 50)
         );
         Map<String, List<DocumentSearchResult>> mergedByQuery = new LinkedHashMap<>();

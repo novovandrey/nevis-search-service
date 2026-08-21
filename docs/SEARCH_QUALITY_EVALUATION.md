@@ -1,5 +1,10 @@
 # Search-quality evaluation
 
+> **Historical representation:** all measurements below used one embedding per complete document.
+> The chunked HNSW implementation on `main` intentionally uses 50 document candidates, 250 chunk
+> candidates and `ef_search=500`. The old `candidateLimit=10` and score-gap `0.003368` findings must
+> not be applied to query-to-chunk retrieval until the coordinated evaluation is rerun.
+
 ## Result
 
 Hybrid PostgreSQL FTS plus semantic retrieval and weighted RRF remains the selected architecture.

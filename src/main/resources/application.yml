@@ -24,12 +24,18 @@ nevis:
       trigram-threshold: ${CLIENT_TRIGRAM_SIMILARITY_THRESHOLD:0.50}
     semantic:
       candidate-limit: ${SEMANTIC_CANDIDATE_LIMIT:50}
+      chunk-candidate-limit: ${SEMANTIC_CHUNK_CANDIDATE_LIMIT:250}
+      hnsw-ef-search: ${SEMANTIC_HNSW_EF_SEARCH:500}
       rrf-k: ${SEMANTIC_RRF_K:60}
       minimum-similarity: ${SEMANTIC_MINIMUM_SIMILARITY:0.30}
       lexical-weight: ${SEMANTIC_LEXICAL_WEIGHT:1.25}
       vector-weight: ${SEMANTIC_VECTOR_WEIGHT:1.0}
   documents:
-    max-content-length: ${MAX_DOCUMENT_CONTENT_LENGTH:1000000}
+    max-content-length: ${MAX_DOCUMENT_CONTENT_LENGTH:50000}
+    chunking:
+      max-input-tokens: ${DOCUMENT_CHUNK_MAX_INPUT_TOKENS:240}
+      max-title-tokens: ${DOCUMENT_CHUNK_MAX_TITLE_TOKENS:32}
+      overlap-tokens: ${DOCUMENT_CHUNK_OVERLAP_TOKENS:30}
 
 springdoc:
   swagger-ui:

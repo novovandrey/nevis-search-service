@@ -1,5 +1,7 @@
 package com.nevis.search.application;
 
+import com.nevis.search.application.embedding.EmbeddingModelCapabilities;
+import com.nevis.search.application.embedding.EmbeddingVector;
 import com.nevis.search.application.port.ClientSearchPort;
 import com.nevis.search.application.port.DocumentSearchPort;
 import com.nevis.search.application.port.EmbeddingPort;
@@ -26,7 +28,9 @@ class SearchServiceTest {
     @Test
     void orchestratesLexicalAndSemanticDocumentSearch() {
         SearchProperties properties = new SearchProperties(255, 50);
-        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(50, 60, 0.30, 1.25, 1.0);
+        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(
+                50, 250, 500, 60, 0.30, 1.25, 1.0
+        );
         QueryNormalizer normalizer = new QueryNormalizer(properties);
         ClientSearchQueryNormalizer clientNormalizer = new ClientSearchQueryNormalizer(properties);
         QueryExpander expander = new QueryExpander(query -> Set.of("utility bill"));
@@ -44,8 +48,11 @@ class SearchServiceTest {
             capturedTerms.set(terms);
             return List.of(new DocumentSearchResult(document, 0.4));
         };
-        SemanticDocumentSearchPort semanticSearch = (embedding, limit, minimumSimilarity) -> List.of();
-        EmbeddingPort embeddings = text -> new float[384];
+        SemanticDocumentSearchPort semanticSearch = (
+                embedding, documentLimit, chunkLimit, efSearch, minimumSimilarity
+        ) -> List.of();
+        EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities("test", 384, 510);
+        EmbeddingPort embeddings = text -> EmbeddingVector.of(new float[384], capabilities);
         SearchService service = new SearchService(
                 normalizer, clientNormalizer, expander, clientSearch, documentSearch,
                 semanticSearch, embeddings, new HybridDocumentSearchMerger(semanticProperties, properties), semanticProperties
@@ -57,5 +64,35 @@ class SearchServiceTest {
         assertThat(result.documents()).extracting(DocumentSearchResult::document).containsExactly(document);
         assertThat(capturedClientQuery.get().value()).isEqualTo("addressproof");
         assertThat(capturedTerms.get()).containsExactlyInAnyOrder("address proof", "utility bill");
+    }
+
+    @Test
+    void returnsLexicalDocumentsWhenSemanticSearchFails() {
+        SearchProperties properties = new SearchProperties(255, 50);
+        SemanticSearchProperties semanticProperties = new SemanticSearchProperties(
+                50, 250, 500, 60, 0.30, 1.25, 1.0
+        );
+        QueryNormalizer normalizer = new QueryNormalizer(properties);
+        Document document = new Document(
+                UUID.randomUUID(), UUID.randomUUID(), "Passport", "Official identity record", Instant.now()
+        );
+        EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities("test", 384, 510);
+        SearchService service = new SearchService(
+                normalizer,
+                new ClientSearchQueryNormalizer(properties),
+                new QueryExpander(query -> Set.of()),
+                query -> List.of(),
+                (terms, limit) -> List.of(new DocumentSearchResult(document, 1.0)),
+                (embedding, documentLimit, chunkLimit, efSearch, minimumSimilarity) -> {
+                    throw new IllegalStateException("Vector search unavailable");
+                },
+                text -> EmbeddingVector.of(new float[384], capabilities),
+                new HybridDocumentSearchMerger(semanticProperties, properties),
+                semanticProperties
+        );
+
+        assertThat(service.search("passport").documents())
+                .extracting(DocumentSearchResult::document)
+                .containsExactly(document);
     }
 }
