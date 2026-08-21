@@ -31,6 +31,11 @@ COMMON_PARAMETERS: dict[str, float | int] = {
     "lexicalWeight": 1.25,
     "vectorWeight": 1.0,
 }
+BOUNDARY_TAGS = (
+    "start", "middle", "end", "before_boundary", "after_boundary", "oversized_paragraph",
+    "token_fallback_sentence", "misleading_title", "multi_topic", "duplicate_near_duplicate",
+    "multiple_relevant_chunks",
+)
 
 
 @dataclass(frozen=True)
@@ -260,6 +265,42 @@ def run_ann_grid(
     return summaries
 
 
+def case_metrics(
+        queries: Sequence[EvaluationQuery],
+        responses: Sequence[Mapping[str, Any]],
+        aliases: Mapping[str, str],
+) -> tuple[dict[str, dict[str, float | int]], list[dict[str, Any]]]:
+    rankings = [
+        ranking_from_response(query, response, aliases)
+        for query, response in zip(queries, responses, strict=True)
+    ]
+    per_tag: dict[str, dict[str, float | int]] = {}
+    for tag in BOUNDARY_TAGS:
+        tagged = [ranking for ranking in rankings if tag in ranking.query.tags and ranking.query.has_relevant_document]
+        if tagged:
+            metrics = summarize(tagged)
+            per_tag[tag] = {
+                "queryCount": len(tagged),
+                "recallAt10": metrics.recall_at_10,
+                "mrr": metrics.mrr,
+                "ndcgAt10": metrics.ndcg_at_10,
+            }
+    failures = []
+    for ranking in rankings:
+        if not ranking.query.has_relevant_document:
+            continue
+        relevant = {document_id for document_id, grade in ranking.query.judgments.items() if grade >= 2}
+        retrieved = {result.document_id for result in ranking.results[:10]}
+        if not relevant.issubset(retrieved):
+            failures.append({
+                "queryId": ranking.query.id,
+                "tags": list(ranking.query.tags),
+                "missingRelevantDocuments": sorted(relevant - retrieved),
+                "top10": [result.document_id for result in ranking.results[:10]],
+            })
+    return per_tag, failures
+
+
 def dataset_checksum(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -282,22 +323,32 @@ def run(args: argparse.Namespace) -> None:
     aliases = {runtime_id: alias for alias, runtime_id in runtime_ids.items()}
     populated_metadata = client.get("/internal/evaluation/metadata")
 
-    permissive, permissive_responses = run_threshold(client, queries, aliases, -1.0)
-    scores = (
-        item["similarity"]
-        for response in permissive_responses
-        for item in response["semantic"]
-    )
-    thresholds = quantile_threshold_candidates(scores)
-    outcomes = [permissive]
-    raw_thresholds: dict[str, Any] = {"-1.000000": permissive_responses}
-    for threshold in thresholds:
-        if threshold == -1.0:
-            continue
-        outcome, responses = run_threshold(client, queries, aliases, threshold)
-        outcomes.append(outcome)
-        raw_thresholds[f"{threshold:.6f}"] = responses
-    selected = select_threshold_candidate(outcomes)
+    if args.fixed_threshold is None:
+        permissive, permissive_responses = run_threshold(client, queries, aliases, -1.0)
+        scores = (
+            item["similarity"]
+            for response in permissive_responses
+            for item in response["semantic"]
+        )
+        thresholds = quantile_threshold_candidates(scores)
+        outcomes = [permissive]
+        raw_thresholds: dict[str, Any] = {"-1.000000": permissive_responses}
+        for threshold in thresholds:
+            if threshold == -1.0:
+                continue
+            outcome, responses = run_threshold(client, queries, aliases, threshold)
+            outcomes.append(outcome)
+            raw_thresholds[f"{threshold:.6f}"] = responses
+        selected = select_threshold_candidate(outcomes)
+        selection_mode = "quantile-tuning"
+    else:
+        selected, selected_responses = run_threshold(client, queries, aliases, args.fixed_threshold)
+        outcomes = [selected]
+        raw_thresholds = {f"{args.fixed_threshold:.6f}": selected_responses}
+        selection_mode = "fixed-holdout"
+
+    selected_responses = raw_thresholds[f"{selected.threshold:.6f}"]
+    per_case_metrics, failures = case_metrics(queries, selected_responses, aliases)
 
     ann = run_ann_grid(client, queries, -1.0, raw_dir) if args.ann_grid else []
     plan_exact = client.post("/internal/evaluation/semantic-plan", {
@@ -329,11 +380,14 @@ def run(args: argparse.Namespace) -> None:
         "indexingDocumentsPerSecond": len(dataset.documents) / indexing_seconds,
         "indexingChunksPerSecond": populated_metadata["database"]["chunkCount"] / indexing_seconds,
         "thresholdCandidates": [outcome.threshold for outcome in outcomes],
+        "thresholdSelection": selection_mode,
         "thresholdOutcomes": [
             {"threshold": outcome.threshold, **outcome.metrics.json()} for outcome in outcomes
         ],
         "selectedThreshold": selected.threshold,
         "selectedMetrics": selected.metrics.json(),
+        "caseMetrics": per_case_metrics,
+        "positiveTop10Failures": failures,
         "annGrid": ann,
         "warning": (
             "document Recall@50 below 0.98"
@@ -357,6 +411,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=Path(__file__).parent / "output" / "quality-latest")
     parser.add_argument("--split", choices=("tuning", "holdout"), default="tuning")
     parser.add_argument("--ann-grid", action="store_true")
+    parser.add_argument("--fixed-threshold", type=float)
     parser.add_argument("--timeout", type=float, default=180.0)
     return parser.parse_args()
 

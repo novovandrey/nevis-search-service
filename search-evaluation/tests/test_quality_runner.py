@@ -5,7 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from metrics import MetricsSummary
-from quality_runner import AnnFidelity, ThresholdOutcome, ann_fidelity, quantile_threshold_candidates, select_threshold_candidate
+from dataset import EvaluationQuery
+from quality_runner import ThresholdOutcome, ann_fidelity, case_metrics, quantile_threshold_candidates, select_threshold_candidate
 
 
 class QualityRunnerTest(unittest.TestCase):
@@ -33,6 +34,19 @@ class QualityRunnerTest(unittest.TestCase):
         self.assertEqual(result.document_recall_at_50, 0.5)
         self.assertEqual(result.top_10_overlap, 0.5)
         self.assertEqual(result.p50_ms, 4.0)
+
+    def test_case_metrics_report_boundary_recall_and_missing_relevant_documents(self) -> None:
+        query = EvaluationQuery(
+            "boundary", "boundary phrase", "NATURAL_LANGUAGE", "TUNING",
+            {"expected": 3}, ("after_boundary",),
+        )
+        response = {
+            "final": [{"documentId": "runtime-other", "rank": 1, "rrfScore": 0.1}],
+            "timings": {"totalMs": 1},
+        }
+        metrics, failures = case_metrics((query,), (response,), {"runtime-other": "other"})
+        self.assertEqual(metrics["after_boundary"]["recallAt10"], 0.0)
+        self.assertEqual(failures[0]["missingRelevantDocuments"], ["expected"])
 
     def response(self, chunks: list[tuple[str, int]], documents: list[str], latency: int) -> dict:
         return {
