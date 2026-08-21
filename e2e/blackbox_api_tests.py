@@ -650,8 +650,9 @@ def test_semantic_search(base_url: str, client_id: str) -> None:
     print("PASS semantic search finds a document without lexical overlap or an explicit term mapping")
 
     late_content = (
-        "Cooking archive notes discuss tomatoes basil pasta olive oil and kitchen equipment. " * 90
-        + "\n\nThe customer receives a monthly electricity statement for the apartment at 10 King Street."
+        "cooking " * 414
+        + "\n\n"
+        + "The customer receives a monthly electricity statement for the apartment at 10 King Street. " * 6
     )
     late_document_id, late_response = create_document(
         base_url,

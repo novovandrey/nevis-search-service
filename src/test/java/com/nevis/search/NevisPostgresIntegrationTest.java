@@ -291,8 +291,10 @@ class NevisPostgresIntegrationTest {
     @Test
     void chunkSearchFindsLateContentAndCollapsesToBestChunkScore() {
         Client client = clientService.create("Chunk", "Tester", "chunks@example.com", null);
-        String earlyFiller = "Cooking recipes discuss tomatoes basil pasta and olive oil. ".repeat(80);
-        String relevantTail = "The customer receives an electricity statement for the apartment at 10 King Street.";
+        String earlyFiller = "cooking ".repeat(414);
+        String relevantTail = (
+                "The customer receives an electricity statement for the apartment at 10 King Street. "
+        ).repeat(6);
         Document document = documentService.create(
                 client.id(), "Monthly electricity statement", earlyFiller + "\n\n" + relevantTail
         );
