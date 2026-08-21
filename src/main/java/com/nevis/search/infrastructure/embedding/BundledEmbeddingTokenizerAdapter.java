@@ -4,30 +4,25 @@ import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.huggingface.tokenizers.jni.CharSpan;
 import com.nevis.search.application.port.EmbeddingTokenizerPort;
-import jakarta.annotation.PreDestroy;
-import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 
-@Component
-@Profile("!evaluation")
-public class MiniLmEmbeddingTokenizerAdapter implements EmbeddingTokenizerPort {
+final class BundledEmbeddingTokenizerAdapter implements EmbeddingTokenizerPort, AutoCloseable {
 
     private final HuggingFaceTokenizer tokenizer;
 
-    public MiniLmEmbeddingTokenizerAdapter() {
-        try (InputStream input = getClass().getResourceAsStream("/all-minilm-l6-v2-tokenizer.json")) {
+    BundledEmbeddingTokenizerAdapter(String resource, String modelId) {
+        try (InputStream input = getClass().getResourceAsStream(resource)) {
             if (input == null) {
-                throw new IllegalStateException("MiniLM tokenizer resource is unavailable");
+                throw new IllegalStateException(modelId + " tokenizer resource is unavailable");
             }
             tokenizer = HuggingFaceTokenizer.newInstance(
                     input, Map.of("padding", "false", "truncation", "false")
             );
         } catch (IOException exception) {
-            throw new IllegalStateException("Could not initialize MiniLM tokenizer", exception);
+            throw new IllegalStateException("Could not initialize " + modelId + " tokenizer", exception);
         }
     }
 
@@ -52,17 +47,18 @@ public class MiniLmEmbeddingTokenizerAdapter implements EmbeddingTokenizerPort {
         if (startCodePoint < 0 || endCodePoint < startCodePoint || endCodePoint > codePointCount) {
             throw new IllegalStateException("Tokenizer returned invalid character offsets");
         }
-        int start = text.offsetByCodePoints(0, startCodePoint);
-        int end = text.offsetByCodePoints(0, endCodePoint);
-        return text.substring(start, end);
+        return text.substring(
+                text.offsetByCodePoints(0, startCodePoint),
+                text.offsetByCodePoints(0, endCodePoint)
+        );
     }
 
     private Encoding encode(String text) {
         return tokenizer.encode(text, false, true);
     }
 
-    @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         tokenizer.close();
     }
 }

@@ -109,7 +109,7 @@ public class PostgresEvaluationSemanticSearchAdapter implements EvaluationSemant
         return jdbcClient.sql("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + NEAREST_CHUNKS_SQL)
                 .param("embedding", vector)
                 .param("chunkCandidateLimit", chunkCandidateLimit)
-                .query(String.class)
+                .query((resultSet, rowNumber) -> resultSet.getString(1))
                 .single();
     }
 

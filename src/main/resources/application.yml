@@ -17,6 +17,8 @@ server:
   port: ${SERVER_PORT:8080}
 
 nevis:
+  evaluation:
+    embedding-model: ${EVALUATION_EMBEDDING_MODEL:MINILM}
   search:
     max-query-length: ${MAX_QUERY_LENGTH:255}
     max-results: ${MAX_SEARCH_RESULTS:50}

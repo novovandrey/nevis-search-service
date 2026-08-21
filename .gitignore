@@ -19,4 +19,6 @@ hs_err_pid*
 replay_pid*
 __pycache__/
 *.py[cod]
+*.egg-info/
 search-evaluation/output/
+search-evaluation/.venv/

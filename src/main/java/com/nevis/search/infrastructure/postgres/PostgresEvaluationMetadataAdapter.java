@@ -25,7 +25,7 @@ public class PostgresEvaluationMetadataAdapter implements EvaluationMetadataPort
                                (SELECT extversion FROM pg_extension WHERE extname = 'vector') AS pgvector_version,
                                (SELECT count(*) FROM documents) AS document_count,
                                (SELECT count(*) FROM document_chunks) AS chunk_count,
-                               pg_total_relation_size('document_chunks') AS chunk_table_bytes,
+                               pg_table_size('document_chunks') AS chunk_table_bytes,
                                COALESCE(pg_relation_size(
                                    to_regclass('document_chunks_embedding_hnsw_idx')
                                ), 0) AS hnsw_index_bytes
