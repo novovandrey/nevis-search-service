@@ -54,10 +54,26 @@ The service exposes only the following Spring Boot Actuator endpoints:
 - `GET /actuator/health` for application health;
 - `GET /actuator/prometheus` for Prometheus-compatible metrics.
 
-Custom metrics cover search traffic and complete latency, zero-result rate, client-company exact,
-fuzzy, and no-match behavior, lexical and semantic candidate volumes, FTS, semantic, and query
-embedding latency, plus document size, chunks per document, and document embedding/indexing latency.
-When a client search returns both exact and fuzzy matches, both path counters increment once for that
+In production, `/actuator/prometheus` is intended to be scraped by an external monitoring system;
+this service does not bundle Prometheus, Grafana, or another monitoring stack. The endpoint can also
+be inspected directly when troubleshooting. The ten primary custom metrics are:
+
+| Prometheus metric | Why it matters |
+| --- | --- |
+| `search_requests_total` | Measures accepted search traffic and provides the denominator for search rates. |
+| `search_latency_seconds` | Tracks end-to-end search latency and supports average and percentile latency analysis. |
+| `search_zero_results_total` | Highlights searches that return neither clients nor documents, an important online relevance proxy. |
+| `search_results_count` | Reveals changes in result-set size, including unexpectedly broad or sparse retrieval. |
+| `client_search_exact_match_total` | Shows how often a query identifies a client company confidently through an exact match. |
+| `client_search_fuzzy_match_total` | Shows reliance on typo-tolerant matching and can expose changes in query or client data quality. |
+| `search_fts_latency_seconds` | Isolates PostgreSQL full-text retrieval latency from the rest of the search pipeline. |
+| `search_semantic_latency_seconds` | Isolates semantic retrieval cost and helps identify degradation or fallback in that branch. |
+| `document_create_requests_total` | Measures ingestion demand, including attempts that eventually fail after reaching the use case. |
+| `document_create_latency_seconds` | Tracks the complete document-ingestion path, including chunking, embedding, and persistence. |
+
+Additional supporting metrics remain exported for client no-match behavior, query and document
+embedding latency, lexical and semantic candidate volumes, document size, and chunks created. When
+a client search returns both exact and fuzzy matches, both path counters increment once for that
 request; this reflects the existing result set without changing its ranking.
 
 These online metrics are operational and search-quality proxies. Metrics such as Recall@10,
