@@ -218,6 +218,14 @@ Validation and failures use a consistent response shape:
 - `all-MiniLM-L6-v2` runs locally through ONNX and returns 384-dimensional embeddings. Documents
   are indexed as model-token-aware chunks in PostgreSQL and searched through a cosine HNSW index;
   FTS remains full-document and semantic chunks collapse back to documents before RRF.
+- **Embedding model evaluation decision (2026-08-21):** production remains on
+  `all-MiniLM-L6-v2`. The completed evaluation selected `intfloat/e5-small-v2` as the measured
+  quality winner, but did not authorize a production migration; E5 has higher search latency and
+  indexing cost and requires a separate production decision and revalidation. The production
+  chunking `240/32/30`, similarity threshold `0.30`, document/chunk/HNSW limits `50/250/500`, and
+  RRF `60/1.25/1.0` therefore remain unchanged. See the evaluation branch's
+  [final decision](https://github.com/novovandrey/nevis-search-service/blob/codex/search-quality-evaluation/SEARCH_EVALUATION_FINAL.md)
+  and [model comparison](https://github.com/novovandrey/nevis-search-service/blob/codex/search-quality-evaluation/EMBEDDING_MODEL_EVALUATION.md).
 - CRUD repositories, `ClientSearchPort`, `DocumentSearchPort`, `SemanticDocumentSearchPort`,
   `EmbeddingPort`, and `QueryExpansionPort` are separate capabilities. PostgreSQL SQL, `tsquery`,
   vector operators, and mapping-table details stay in infrastructure adapters.
