@@ -652,7 +652,7 @@ def test_semantic_search(base_url: str, client_id: str) -> None:
     late_content = (
         "cooking " * 414
         + "\n\n"
-        + "The customer receives a monthly electricity statement for the apartment at 10 King Street. " * 6
+        + "The customer receives a monthly electricity statement for the apartment at 10 King Street. " * 30
     )
     late_document_id, late_response = create_document(
         base_url,

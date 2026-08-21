@@ -294,7 +294,7 @@ class NevisPostgresIntegrationTest {
         String earlyFiller = "cooking ".repeat(414);
         String relevantTail = (
                 "The customer receives an electricity statement for the apartment at 10 King Street. "
-        ).repeat(6);
+        ).repeat(30);
         Document document = documentService.create(
                 client.id(), "Monthly electricity statement", earlyFiller + "\n\n" + relevantTail
         );
