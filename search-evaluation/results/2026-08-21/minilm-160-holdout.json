@@ -1,0 +1,200 @@
+{
+  "runAt": "2026-08-21T17:45:04.141725+00:00",
+  "dataset": "/home/andrey/apps/nevis-search-evaluation/search-evaluation/data/long-document-dataset.json",
+  "datasetSha256": "8ebcbf4fb50dc7f5131d897e76ddb54a93bbd07e55a03aaa1d0365c45ddb1824",
+  "split": "HOLDOUT",
+  "startupMetadata": {
+    "model": {
+      "modelId": "all-MiniLM-L6-v2",
+      "dimension": 384,
+      "maxInputTokens": 510
+    },
+    "chunking": {
+      "maxInputTokens": 160,
+      "maxTitleTokens": 32,
+      "overlapTokens": 20
+    },
+    "semantic": {
+      "candidateLimit": 50,
+      "chunkCandidateLimit": 250,
+      "hnswEfSearch": 500,
+      "rrfK": 60,
+      "minimumSimilarity": 0.3,
+      "lexicalWeight": 1.25,
+      "vectorWeight": 1.0
+    },
+    "database": {
+      "postgresVersion": "17.8 (Debian 17.8-1.pgdg12+1)",
+      "pgvectorVersion": "0.8.1",
+      "documentCount": 0,
+      "chunkCount": 0,
+      "chunkTableBytes": 8192,
+      "hnswIndexBytes": 16384
+    }
+  },
+  "populatedMetadata": {
+    "model": {
+      "modelId": "all-MiniLM-L6-v2",
+      "dimension": 384,
+      "maxInputTokens": 510
+    },
+    "chunking": {
+      "maxInputTokens": 160,
+      "maxTitleTokens": 32,
+      "overlapTokens": 20
+    },
+    "semantic": {
+      "candidateLimit": 50,
+      "chunkCandidateLimit": 250,
+      "hnswEfSearch": 500,
+      "rrfK": 60,
+      "minimumSimilarity": 0.3,
+      "lexicalWeight": 1.25,
+      "vectorWeight": 1.0
+    },
+    "database": {
+      "postgresVersion": "17.8 (Debian 17.8-1.pgdg12+1)",
+      "pgvectorVersion": "0.8.1",
+      "documentCount": 72,
+      "chunkCount": 1289,
+      "chunkTableBytes": 2924544,
+      "hnswIndexBytes": 2506752
+    }
+  },
+  "indexingSeconds": 51.49514438404003,
+  "indexingDocumentsPerSecond": 1.398190079108023,
+  "indexingChunksPerSecond": 25.03148627736447,
+  "thresholdCandidates": [
+    0.386544
+  ],
+  "thresholdSelection": "fixed-holdout",
+  "thresholdOutcomes": [
+    {
+      "threshold": 0.386544,
+      "recall_at_5": 0.9444444444444444,
+      "recall_at_10": 0.9814814814814815,
+      "precision_at_10": 0.13409758965314522,
+      "mrr": 0.9370370370370371,
+      "ndcg_at_10": 0.9430767495016075,
+      "zero_result_rate": 0.1111111111111111,
+      "negative_false_positive_rate": 0.5555555555555556,
+      "true_no_result_rate": 0.4444444444444444,
+      "easy_negative_false_positive_rate": 0.0,
+      "domain_negative_false_positive_rate": 0.0,
+      "hard_negative_false_positive_rate": 0.5555555555555556,
+      "mean_latency_ms": 32.861111111111114,
+      "p50_latency_ms": 34.0,
+      "p95_latency_ms": 47.5,
+      "positive_query_count": 27,
+      "negative_query_count": 9
+    }
+  ],
+  "selectedThreshold": 0.386544,
+  "selectedMetrics": {
+    "recall_at_5": 0.9444444444444444,
+    "recall_at_10": 0.9814814814814815,
+    "precision_at_10": 0.13409758965314522,
+    "mrr": 0.9370370370370371,
+    "ndcg_at_10": 0.9430767495016075,
+    "zero_result_rate": 0.1111111111111111,
+    "negative_false_positive_rate": 0.5555555555555556,
+    "true_no_result_rate": 0.4444444444444444,
+    "easy_negative_false_positive_rate": 0.0,
+    "domain_negative_false_positive_rate": 0.0,
+    "hard_negative_false_positive_rate": 0.5555555555555556,
+    "mean_latency_ms": 32.861111111111114,
+    "p50_latency_ms": 34.0,
+    "p95_latency_ms": 47.5,
+    "positive_query_count": 27,
+    "negative_query_count": 9
+  },
+  "caseMetrics": {
+    "start": {
+      "queryCount": 3,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "middle": {
+      "queryCount": 3,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "end": {
+      "queryCount": 3,
+      "recallAt10": 1.0,
+      "mrr": 0.7000000000000001,
+      "ndcgAt10": 0.7630216087726293
+    },
+    "before_boundary": {
+      "queryCount": 3,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "after_boundary": {
+      "queryCount": 3,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "oversized_paragraph": {
+      "queryCount": 3,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "token_fallback_sentence": {
+      "queryCount": 2,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "misleading_title": {
+      "queryCount": 1,
+      "recallAt10": 1.0,
+      "mrr": 0.2,
+      "ndcgAt10": 0.38685280723454163
+    },
+    "multi_topic": {
+      "queryCount": 2,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    },
+    "duplicate_near_duplicate": {
+      "queryCount": 2,
+      "recallAt10": 0.75,
+      "mrr": 1.0,
+      "ndcgAt10": 0.893577301495486
+    },
+    "multiple_relevant_chunks": {
+      "queryCount": 2,
+      "recallAt10": 1.0,
+      "mrr": 1.0,
+      "ndcgAt10": 1.0
+    }
+  },
+  "positiveTop10Failures": [
+    {
+      "queryId": "long-positive-065",
+      "tags": [
+        "duplicate_near_duplicate",
+        "property"
+      ],
+      "missingRelevantDocuments": [
+        "long-doc-064"
+      ],
+      "top10": [
+        "long-doc-065",
+        "long-doc-055",
+        "long-doc-061",
+        "long-doc-062",
+        "long-doc-060"
+      ]
+    }
+  ],
+  "annGrid": [],
+  "warning": null
+}
