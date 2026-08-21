@@ -103,7 +103,7 @@ Find clients by a company-like query derived from the email domain. Exact domain
 typo-tolerant matches:
 
 ```bash
-curl "http://localhost:8080/search?q=Hewlett%20Packard"
+curl "http://localhost:8080/search?q=Nevis%20wealth"
 ```
 
 The global endpoint returns one typed array. An exact `hewlettpackard.com` client precedes a
