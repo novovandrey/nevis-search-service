@@ -294,7 +294,7 @@ class NevisPostgresIntegrationTest {
         String earlyFiller = "Cooking recipes discuss tomatoes basil pasta and olive oil. ".repeat(80);
         String relevantTail = "The customer receives an electricity statement for the apartment at 10 King Street.";
         Document document = documentService.create(
-                client.id(), "Archived notes", earlyFiller + "\n\n" + relevantTail
+                client.id(), "Monthly electricity statement", earlyFiller + "\n\n" + relevantTail
         );
         assertThat(jdbcClient.sql("SELECT count(*) FROM document_chunks WHERE document_id = :id")
                 .param("id", document.id()).query(Long.class).single()).isGreaterThan(1L);

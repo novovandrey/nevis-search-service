@@ -656,7 +656,7 @@ def test_semantic_search(base_url: str, client_id: str) -> None:
     late_document_id, late_response = create_document(
         base_url,
         client_id,
-        "Archived household notes",
+        "Monthly electricity statement archive",
         late_content,
     )
     check(late_response["content"] == late_content, "chunked document response did not preserve full content")

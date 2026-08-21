@@ -88,7 +88,7 @@ class HybridSearchCalibrationTest {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbcClient.sql("TRUNCATE TABLE documents, clients").update();
+        jdbcClient.sql("TRUNCATE TABLE document_chunks, documents, clients").update();
     }
 
     @Test
