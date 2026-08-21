@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from metrics import MetricsSummary
 from dataset import EvaluationQuery
+from gap_analysis import apply_gap, gap_candidates
 from quality_runner import ThresholdOutcome, ann_fidelity, case_metrics, quantile_threshold_candidates, select_threshold_candidate
 
 
@@ -47,6 +48,24 @@ class QualityRunnerTest(unittest.TestCase):
         metrics, failures = case_metrics((query,), (response,), {"runtime-other": "other"})
         self.assertEqual(metrics["after_boundary"]["recallAt10"], 0.0)
         self.assertEqual(failures[0]["missingRelevantDocuments"], ["expected"])
+
+    def test_gap_policy_keeps_lexical_results_when_semantic_gap_is_too_small(self) -> None:
+        response = {
+            "lexical": [{"documentId": "lexical"}],
+            "semantic": [
+                {"documentId": "semantic", "similarity": 0.81},
+                {"documentId": "lexical", "similarity": 0.80},
+            ],
+            "final": [
+                {"documentId": "semantic", "rank": 1, "rrfScore": 0.2},
+                {"documentId": "lexical", "rank": 2, "rrfScore": 0.1},
+            ],
+        }
+        filtered = apply_gap(response, 0.02)
+        self.assertEqual(filtered["final"], [
+            {"documentId": "lexical", "rank": 1, "rrfScore": 0.1},
+        ])
+        self.assertIn(0.0, gap_candidates((response,)))
 
     def response(self, chunks: list[tuple[str, int]], documents: list[str], latency: int) -> dict:
         return {
